@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マイチョイス（プロトタイプ）</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#ffffff; --ink:#2b2620; --sub:#6b6258;
+    --line:#e7e0d5; --accent:#7a8f5c; --accent-ink:#3f4a30;
+    --good:#5a8f5a; --warn:#b8860b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1c1a17; --card:#26231f; --ink:#ede7dd; --sub:#b0a89a;
+      --line:#3a352d; --accent:#9cb27d; --accent-ink:#c8dab0;
+      --good:#8fc98f; --warn:#e0b84f; }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px 16px 60px; background:var(--bg); color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic",system-ui,-apple-system,sans-serif;
+  }
+  .wrap{max-width:960px; margin:0 auto;}
+  h1{font-size:1.3rem; margin:0 0 4px;}
+  .lede{color:var(--sub); font-size:.88rem; margin:0 0 18px; line-height:1.7;}
+
+  .panel{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px; margin-bottom:16px;
+  }
+  .panel h2{font-size:.95rem; margin:0 0 10px; color:var(--accent-ink);}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .search-row input[type=text]{
+    flex:1; min-width:200px; padding:10px 12px; border-radius:10px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink); font-size:.95rem;
+  }
+  button{
+    padding:10px 18px; border-radius:10px; border:none; background:var(--accent);
+    color:#fff; font-weight:600; cursor:pointer; font-size:.92rem;
+  }
+  button:hover{opacity:.9;}
+  button:disabled{opacity:.5; cursor:default;}
+
+  .prefs{display:flex; gap:18px; flex-wrap:wrap; font-size:.88rem;}
+  .pref label{display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .pref input[type=checkbox]{width:16px; height:16px;}
+
+  .status{font-size:.85rem; color:var(--sub); min-height:1.4em; margin:6px 0 0;}
+  .status.err{color:#c0554a;}
+
+  table{border-collapse:collapse; width:100%; font-size:.85rem;}
+  th, td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{cursor:pointer; user-select:none; color:var(--sub); font-weight:600; white-space:nowrap;}
+  th:hover{color:var(--accent-ink);}
+  tr:last-child td{border-bottom:none;}
+  .name{font-weight:600;}
+  .name a{color:var(--ink); text-decoration:none;}
+  .name a:hover{text-decoration:underline;}
+  .shop{color:var(--sub); font-size:.82em; margin-top:2px;}
+  .num{font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .tag{display:inline-block; padding:2px 8px; border-radius:999px; font-size:.78em; font-weight:600;}
+  .tag.good{background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good);}
+  .tag.warn{background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn);}
+  .note{color:var(--sub); font-size:.85rem; margin-top:14px; line-height:1.7;}
+  .score{font-weight:700; color:var(--accent-ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>マイチョイス（プロトタイプ）</h1>
+  <p class="lede">好みプロフィールをもとに、楽天市場の実データから中立に一覧化します。まだ手作りの試作段階なので、精度より「仕組みが動くか」を確認するためのものです。</p>
+
+  <div class="panel">
+    <h2>好みプロフィール</h2>
+    <div class="prefs">
+      <div class="pref"><label><input type="checkbox" id="prefCost" checked> コスパ重視（円/mlが安い順を優先）</label></div>
+      <div class="pref"><label><input type="checkbox" id="prefAdditive" checked> 無添加を重視する</label></div>
+      <div class="pref"><label><input type="checkbox" id="prefDomestic"> 国産（日本）を重視する</label></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>検索</h2>
+    <div class="row search-row">
+      <input type="text" id="q" value="梅シロップ" />
+      <button id="go">おすすめは？</button>
+    </div>
+    <p class="status" id="status"></p>
+  </div>
+
+  <div class="panel" id="resultPanel" style="display:none;">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-key="name">商品 ↕</th>
+          <th data-key="perml">円/ml ↕</th>
+          <th data-key="additive">無添加 ↕</th>
+          <th data-key="origin">産地 ↕</th>
+          <th data-key="rating">口コミ ↕</th>
+          <th data-key="score">総合スコア ↕</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    「無添加」「産地」は商品名・説明文をこのページ内で簡易的にキーワード検出しているだけです（本文中に「無添加」「化学調味料不使用」などの語があるかを見ているだけで、本当に無添加かどうかをこのページが判定・保証するものではありません）。空欄は「そう書かれていない／読み取れなかった」という意味で、無添加ではないという意味ではありません。円/mlは商品名・説明文からml表記を検出できた場合のみ計算しています（g表記など単位が違う商品は「—」になります）。
+  </p>
+</div>
+
+<script>
+// ▼ このページを github.io で公開して開いたときだけ、楽天側のリファラーチェックを通過します。
+//   ローカルでダブルクリックして開いただけでは実データは取得できません（HTTP_REFERRER_MISSING 等のエラーになります）。
+const RAKUTEN_APP_ID = "0151ff90-e03b-4d28-981a-dac33539f3d1";
+const RAKUTEN_ACCESS_KEY = "pk_2WchspGfdU1i9gJVaf7W32Vl9z69xBQyXvw8FPTpwAX";
+const ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701";
+
+const statusEl = document.getElementById("status");
+const resultPanel = document.getElementById("resultPanel");
+const tbody = document.querySelector("#tbl tbody");
+const goBtn = document.getElementById("go");
+
+let currentRows = [];
+let jsonpCounter = 0;
+
+function jsonpRequest(params, timeoutMs = 12000){
+  return new Promise((resolve, reject) => {
+    const cbName = "mychoiceCb_" + (jsonpCounter++);
+    const script = document.createElement("script");
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("タイムアウトしました（リファラー制限などで拒否された可能性があります）"));
+    }, timeoutMs);
+
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error("APIへの接続に失敗しました")); };
+
+    const qs = new URLSearchParams({ ...params, format: "jsonp", callback: cbName });
+    script.src = `${ENDPOINT}?${qs.toString()}`;
+    document.head.appendChild(script);
+  });
+}
+
+// ざっくりキーワード検出（本格版ではここをAIによる抽出に置き換える想定）
+const ADDITIVE_WORDS = ["無添加", "化学調味料不使用", "保存料不使用", "着色料不使用", "添加物不使用"];
+const DOMESTIC_WORDS = ["国産", "和歌山", "紀州", "南高梅", "長野県産", "群馬県産", "奈良県産", "日本産"];
+
+function detectAdditive(text){
+  return ADDITIVE_WORDS.some(w => text.includes(w));
+}
+function detectOrigin(text){
+  const hit = DOMESTIC_WORDS.find(w => text.includes(w));
+  return hit || "";
+}
+function detectMl(text){
+  const m = text.match(/(\d{2,5})\s*m ?l/i);
+  return m ? Number(m[1]) : null;
+}
+
+function normalize(arr){
+  const max = Math.max(...arr, 1);
+  const min = Math.min(...arr, 0);
+  const range = max - min || 1;
+  return arr.map(v => (v - min) / range);
+}
+
+function computeScoresAndRender(items){
+  const prefCost = document.getElementById("prefCost").checked;
+  const prefAdditive = document.getElementById("prefAdditive").checked;
+  const prefDomestic = document.getElementById("prefDomestic").checked;
+
+  const rows = items.map(it => {
+    const item = it.Item || it; // APIバージョンによりItemでラップされる場合がある
+    const text = `${item.itemName || ""} ${item.itemCaption || ""}`;
+    const ml = detectMl(text);
+    const perml = ml ? item.itemPrice / ml : null;
+    return {
+      name: item.itemName,
+      url: item.itemUrl,
+      shop: item.shopName,
+      price: item.itemPrice,
+      ml, perml,
+      additive: detectAdditive(text),
+      origin: detectOrigin(text),
+      rating: item.reviewAverage || null,
+      reviews: item.reviewCount || 0,
+    };
+  });
+
+  // コスパ用スコア（円/mlが低いほど高スコア。検出できないものは中間点）
+  const perMlValues = rows.map(r => r.perml ?? null);
+  const knownPerMl = perMlValues.filter(v => v !== null);
+  const maxPerMl = Math.max(...knownPerMl, 1);
+  const minPerMl = Math.min(...knownPerMl, 0);
+
+  rows.forEach(r => {
+    let costScore = 0.5;
+    if(r.perml !== null && maxPerMl > minPerMl){
+      costScore = 1 - (r.perml - minPerMl) / (maxPerMl - minPerMl);
+    }
+    let score = 0;
+    let weightSum = 0;
+    if(prefCost){ score += costScore; weightSum += 1; }
+    if(prefAdditive){ score += (r.additive ? 1 : 0.3); weightSum += 1; }
+    if(prefDomestic){ score += (r.origin ? 1 : 0.3); weightSum += 1; }
+    r.score = weightSum ? score / weightSum : costScore;
+  });
+
+  currentRows = rows;
+  renderRows([...rows].sort((a,b) => b.score - a.score));
+  resultPanel.style.display = "block";
+}
+
+function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
+
+function renderRows(rows){
+  tbody.innerHTML = "";
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <div class="name"><a href="${r.url}" target="_blank" rel="noopener">${r.name}</a></div>
+        <div class="shop">${r.shop} ・ ${fmtYen(r.price)}${r.ml ? `（${r.ml}ml）` : ""}</div>
+      </td>
+      <td class="num">${r.perml ? r.perml.toFixed(2) + "円" : "—"}</td>
+      <td>${r.additive ? `<span class="tag good">無添加表記あり</span>` : `<span class="tag warn">未検出</span>`}</td>
+      <td>${r.origin || `<span class="note" style="margin:0">不明</span>`}</td>
+      <td class="num">${r.rating ? `★${r.rating} <span class="note" style="margin:0">(${r.reviews}件)</span>` : "データなし"}</td>
+      <td class="num score">${(r.score * 100).toFixed(0)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.querySelectorAll("#tbl th").forEach(th => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.key;
+    const rows = [...currentRows].sort((a,b) => {
+      if(key === "name") return a.name.localeCompare(b.name, "ja");
+      if(key === "additive") return (b.additive?1:0) - (a.additive?1:0);
+      if(key === "origin") return (a.origin||"").localeCompare(b.origin||"", "ja");
+      if(key === "rating") return (b.rating||0) - (a.rating||0);
+      if(key === "perml") return (a.perml ?? Infinity) - (b.perml ?? Infinity);
+      return (b.score||0) - (a.score||0);
+    });
+    renderRows(rows);
+  });
+});
+
+async function runSearch(){
+  const keyword = document.getElementById("q").value.trim();
+  if(!keyword){ return; }
+  goBtn.disabled = true;
+  statusEl.className = "status";
+  statusEl.textContent = "検索中…";
+  resultPanel.style.display = "none";
+  try{
+    const data = await jsonpRequest({
+      applicationId: RAKUTEN_APP_ID,
+      accessKey: RAKUTEN_ACCESS_KEY,
+      keyword,
+      hits: 20,
+      sort: "+itemPrice",
+    });
+    if(data.error){
+      throw new Error(`${data.error}: ${data.error_description || ""}`);
+    }
+    const items = data.Items || [];
+    if(items.length === 0){
+      statusEl.textContent = "商品が見つかりませんでした。";
+      return;
+    }
+    computeScoresAndRender(items);
+    statusEl.textContent = `${items.length}件取得しました。`;
+  }catch(e){
+    statusEl.className = "status err";
+    statusEl.textContent = "エラー: " + e.message + "（このページを実際にgithub.io上で開いているか、楽天アプリの「許可されたWebサイト」設定を確認してください）";
+  }finally{
+    goBtn.disabled = false;
+  }
+}
+
+goBtn.addEventListener("click", runSearch);
+document.getElementById("q").addEventListener("keydown", e => { if(e.key === "Enter") runSearch(); });
+</script>
+</body>
+</html>
