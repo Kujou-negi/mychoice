@@ -243,6 +243,14 @@ function detectIngredients(text){
   const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
   return m ? m[1].trim() : "";
 }
+// 楽天の画像URLは "?_ex=128x128" のようなパラメータでサイズが小さく指定されていることが多いので、
+// 表示に使うため大きいサイズを要求し直す（画質自体はサーバー側の元画像次第だが、縮小し過ぎた画像よりは綺麗になる）
+function upsizeImage(url){
+  if(!url) return url;
+  if(/_ex=\d+x\d+/.test(url)) return url.replace(/_ex=\d+x\d+/, "_ex=600x600");
+  return url + (url.includes("?") ? "&" : "?") + "_ex=600x600";
+}
+
 // 楽天APIのレスポンスから商品画像URLを取り出す（バージョンによって形が微妙に違うため、いくつかの形に対応する）
 function getImageUrl(item){
   const candidates = [item.mediumImageUrls, item.smallImageUrls];
@@ -250,10 +258,10 @@ function getImageUrl(item){
     if(Array.isArray(arr) && arr.length > 0){
       const first = arr[0];
       const url = typeof first === "string" ? first : (first && first.imageUrl);
-      if(url) return url.replace(/^http:\/\//, "https://");
+      if(url) return upsizeImage(url.replace(/^http:\/\//, "https://"));
     }
   }
-  if(typeof item.imageUrl === "string" && item.imageUrl) return item.imageUrl.replace(/^http:\/\//, "https://");
+  if(typeof item.imageUrl === "string" && item.imageUrl) return upsizeImage(item.imageUrl.replace(/^http:\/\//, "https://"));
   return "";
 }
 
@@ -351,26 +359,46 @@ function buildRows(items, attrDefs, aiItemsByIndex){
   return { rows, excluded };
 }
 
-// ほぼ同じ商品（同じ画像、または同じ商品名・価格・容量）が別の店舗名で重複して出てくることがあるため、まとめる
+// 同じ商品が別の店舗から重複して出てくることがあるため、まとめる。
+// 画像URLは店舗ごとに違う写真を使っていることが多く一致しないので、
+// 「商品名（要約後）＋価格＋容量」が一致するものを同一商品とみなす。
+// まとめる際は、片方に欠けている情報（原材料・容器・画像など）をもう片方から補う。
+function mergeRowInfo(base, other){
+  const merged = { ...base };
+  if(!merged.ingredients && other.ingredients) merged.ingredients = other.ingredients;
+  if(!merged.packaging && other.packaging) merged.packaging = other.packaging;
+  if(!merged.summary && other.summary) merged.summary = other.summary;
+  if(!merged.qty && other.qty) merged.qty = other.qty;
+  if(!merged.perUnit && other.perUnit) merged.perUnit = other.perUnit;
+  if(!merged.image && other.image) merged.image = other.image;
+  if((merged.rating === null || merged.rating === undefined) && other.rating != null) merged.rating = other.rating;
+  if(!merged.reviews && other.reviews) merged.reviews = other.reviews;
+  merged.attrHits = { ...other.attrHits, ...base.attrHits };
+  // どちらかで検出されていればOKとする（陽性シグナルを優先）
+  Object.keys(other.attrHits || {}).forEach(k => {
+    if(other.attrHits[k] && !merged.attrHits[k]) merged.attrHits[k] = true;
+  });
+  return merged;
+}
+
 function dedupeRows(rows){
   const seen = new Map();
   const kept = [];
   let duplicates = 0;
 
   rows.forEach(r => {
-    const normName = (r.displayName || r.name || "").replace(/[\s　]/g, "");
-    const key = r.image
-      ? `img:${r.image}`
-      : `name:${normName}|${r.price}|${r.qty ? r.qty.value + r.qty.unit : ""}`;
+    const normName = (r.displayName || r.name || "").replace(/[\s　・、,／\/【】()（）]/g, "");
+    const key = `${normName}|${r.price}|${r.qty ? r.qty.value + r.qty.unit : ""}`;
 
     if(seen.has(key)){
       duplicates++;
       const existingIdx = seen.get(key);
       const existing = kept[existingIdx];
-      // 口コミ件数が多い方（＝より実績があり信頼できそうな方）を代表として残す
-      if((r.reviews || 0) > (existing.reviews || 0)){
-        kept[existingIdx] = r;
-      }
+      // 口コミ件数が多い方（＝より実績があり信頼できそうな方）を代表として残しつつ、
+      // 足りない項目はもう片方から補う
+      const primary = (r.reviews || 0) > (existing.reviews || 0) ? r : existing;
+      const secondary = primary === r ? existing : r;
+      kept[existingIdx] = mergeRowInfo(primary, secondary);
     }else{
       seen.set(key, kept.length);
       kept.push(r);
