@@ -172,7 +172,8 @@ async function analyzeWithAI(keyword, itemsForAI){
   });
   const data = await r.json();
   if(!r.ok){
-    throw new Error(data?.error || `HTTP ${r.status}`);
+    const detail = data?.raw ? ` / ${data.raw.slice(0, 200)}` : "";
+    throw new Error(`${data?.error || "error"} (HTTP ${data?.status || r.status})${detail}`);
   }
   return data; // { attributes: [{id,label}], items: [{index, relevant, attrHits, ingredients, packaging, quantityValue, quantityUnit}] }
 }
@@ -425,7 +426,7 @@ async function runSearch(){
 
     statusEl.textContent = "AIでジャンルを分析中…";
 
-    let attrDefs, aiItemsByIndex, aiFailed = false;
+    let attrDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
     try{
       const ai = await analyzeWithAI(keyword, itemsForAI);
       const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost").slice(0, 4);
@@ -436,6 +437,7 @@ async function runSearch(){
       aiItemsByIndex = new Map((ai.items || []).map(r => [r.index, r]));
     }catch(e){
       aiFailed = true;
+      aiErrorMessage = e.message;
       attrDefs = [
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
         ...fallbackAttrDefs(keyword),
@@ -453,7 +455,7 @@ async function runSearch(){
     resultPanel.style.display = "block";
 
     statusEl.textContent = aiFailed
-      ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています）`
+      ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています / 詳細: ${aiErrorMessage}）`
       : `${items.length}件取得しました。`;
   }catch(e){
     statusEl.className = "status err";
