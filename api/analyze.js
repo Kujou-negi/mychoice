@@ -5,7 +5,7 @@
 // をまとめて1回のAI呼び出しで行う中継サーバーです。
 // APIキーは Vercel の環境変数 GEMINI_API_KEY に保存し、ブラウザには一切渡しません。
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
