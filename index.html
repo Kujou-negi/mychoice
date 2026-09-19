@@ -37,12 +37,25 @@
     background:var(--bg); color:var(--text);
   }
   .searchbox input:focus{outline:none; border-color:var(--accent);}
+  .searchbox input::placeholder{color:var(--text-sub);}
   .searchbox button{
     padding:8px 18px; border:none; border-radius:0 4px 4px 0; background:var(--accent);
     color:#fff; font-weight:600; font-size:.85rem; cursor:pointer; white-space:nowrap;
   }
   .searchbox button:hover{background:var(--accent-hover);}
   .searchbox button:disabled{opacity:.5; cursor:default;}
+
+  /* 検索前は Google のトップページのように、タイトルと検索窓を画面中央に大きく表示する */
+  body.home .topbar{
+    position:static; background:transparent; border-bottom:none;
+    min-height:64vh; display:flex; align-items:center; justify-content:center;
+  }
+  body.home .topbar-inner{
+    flex-direction:column; gap:22px; max-width:520px; width:100%; padding:16px;
+  }
+  body.home .brand{font-size:2rem;}
+  body.home .searchbox{max-width:100%; width:100%;}
+  body.home .layout{display:none;}
 
   .layout{
     max-width:1080px; margin:0 auto; padding:20px 16px 60px;
@@ -127,12 +140,12 @@
   @media (max-width:520px){ .p-side{width:90px;} .p-price{font-size:.92rem;} }
 </style>
 </head>
-<body>
+<body class="home">
 <header class="topbar">
   <div class="topbar-inner">
     <span class="brand">マイチョイス</span>
     <div class="searchbox">
-      <input type="text" id="q" value="梅シロップ" />
+      <input type="text" id="q" placeholder="何を探していますか？" />
       <button id="go">検索</button>
     </div>
   </div>
@@ -604,6 +617,7 @@ sortSelect.addEventListener("change", sortAndRender);
 async function runSearch(){
   const keyword = document.getElementById("q").value.trim();
   if(!keyword){ return; }
+  document.body.classList.remove("home");
   goBtn.disabled = true;
   statusEl.className = "status";
   statusEl.textContent = "検索中…";
