@@ -60,8 +60,8 @@ export default async function handler(req, res) {
     } catch {
       data = { error: "invalid_json_from_rakuten", raw: body.slice(0, 500) };
     }
-    res.status(status).json(data);
+    res.status(200).json({ rakutenStatus: status, data });
   } catch (e) {
-    res.status(500).json({ error: "proxy_error", message: String(e) });
+    res.status(200).json({ error: "proxy_error", message: String(e) });
   }
 }
