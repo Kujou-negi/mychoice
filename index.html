@@ -132,6 +132,7 @@
     display:flex; flex-direction:column; align-items:flex-end; gap:2px;
   }
   .p-price{font-size:1.05rem; font-weight:800; color:var(--price); white-space:nowrap;}
+  .p-qty{font-size:.76rem; color:var(--text); font-weight:600; white-space:nowrap;}
   .p-perunit{font-size:.7rem; color:var(--text-sub);}
   .p-shipping{font-size:.7rem; color:var(--text-sub);}
   .p-shipping.free{color:var(--good); font-weight:600;}
@@ -166,9 +167,9 @@
         <span class="result-count" id="resultCount"></span>
         <select id="sortSelect">
           <option value="score">おすすめ順</option>
+          <option value="price">値段順</option>
           <option value="perunit">単価が安い順</option>
           <option value="rating">口コミ評価順</option>
-          <option value="name">商品名順</option>
         </select>
       </div>
       <ul class="product-list" id="cards"></ul>
@@ -249,6 +250,7 @@ const ORGANIC_WORDS = ["オーガニック", "有機栽培", "有機JAS", "有�
 const FAIRTRADE_WORDS = ["フェアトレード", "フェア・トレード", "Fair Trade", "フェアトレード認証"];
 const DECAF_WORDS = ["デカフェ", "カフェインレス", "ノンカフェイン", "カフェイン0", "カフェインフリー"];
 const HANDMADE_WORDS = ["手作り", "手造り", "職人", "小規模生産", "自家製", "手摘み"];
+const WAKEARI_WORDS = ["訳あり", "わけあり", "ワケあり", "訳アリ", "規格外", "不揃い"];
 
 const FALLBACK_ATTRS = {
   additive:  { label: "無添加を重視する", words: ADDITIVE_WORDS },
@@ -257,7 +259,10 @@ const FALLBACK_ATTRS = {
   fairtrade: { label: "フェアトレードを重視する", words: FAIRTRADE_WORDS },
   decaf:     { label: "カフェインレス・デカフェを重視する", words: DECAF_WORDS },
   handmade:  { label: "手作り・小規模生産を重視する", words: HANDMADE_WORDS },
+  wakeari:   { label: "訳あり品でも気にしない", words: WAKEARI_WORDS },
 };
+// 「訳あり」は食品の検索結果に実際に混ざっているときだけ、絞り込み項目として追加する
+const WAKEARI_ATTR_DEF = { id: "wakeari", label: FALLBACK_ATTRS.wakeari.label, defaultChecked: false };
 const FALLBACK_GENRE_MAP = [
   { match: ["梅シロップ", "梅干し", "梅酒", "梅"], attrs: ["additive", "domestic", "handmade"] },
   { match: ["はちみつ", "蜂蜜", "ハチミツ"], attrs: ["additive", "domestic", "organic"] },
@@ -447,6 +452,11 @@ function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, igno
       });
     }
 
+    // 「訳あり」はAIの判定に頼らず、常にキーワード検出で確実に判定する
+    if(attrDefs.some(a => a.id === "wakeari")){
+      attrHits.wakeari = matchesWords(text, WAKEARI_WORDS);
+    }
+
     const perUnit = qty ? item.itemPrice / qty.value : null;
 
     rows.push({
@@ -557,7 +567,10 @@ function renderCards(rows, excludedInfo){
 
   cardsEl.innerHTML = rows.map(r => {
     const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "";
+    // 容量（qty）は値段の下にセットで表示するので、その他のスペック一覧からは重複を避けて除く
+    const qtyDisplay = (r.specValues || {}).qty || "";
     const specsLine = currentSpecFields
+      .filter(f => f.id !== "qty")
       .map(f => {
         const val = (r.specValues || {})[f.id] || "";
         return val ? `<span><b>${f.label}</b> ${val}</span>` : "";
@@ -593,6 +606,7 @@ function renderCards(rows, excludedInfo){
       </div>
       <div class="p-side">
         <div class="p-price">${fmtYen(r.price)}</div>
+        ${qtyDisplay ? `<div class="p-qty">${qtyDisplay}</div>` : ""}
         ${perUnitValue ? `<div class="p-perunit">${perUnitValue}</div>` : ""}
         <div class="p-shipping ${r.shipping && r.shipping.free ? "free" : ""}">${r.shipping ? r.shipping.label : ""}</div>
         <div class="p-rating">${r.rating ? `★${r.rating}` : "評価なし"}${r.reviews ? ` <span class="count">(${r.reviews})</span>` : ""}</div>
@@ -605,7 +619,7 @@ function renderCards(rows, excludedInfo){
 function sortAndRender(){
   const key = sortSelect.value;
   const rows = [...currentRows].sort((a,b) => {
-    if(key === "name") return a.name.localeCompare(b.name, "ja");
+    if(key === "price") return a.price - b.price;
     if(key === "rating") return (b.rating||0) - (a.rating||0);
     if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
     return (b.score||0) - (a.score||0);
@@ -645,12 +659,21 @@ async function runSearch(){
 
     statusEl.textContent = "AIでジャンルを分析中…";
 
+    // 「訳あり」は食品ジャンルで、実際に検索結果に混ざっているときだけ絞り込み項目に追加する
+    const hasWakeari = isFoodKeyword(keyword) && items.some(it => {
+      const item = it.Item || it;
+      return matchesWords(`${item.itemName || ""} ${item.itemCaption || ""}`, WAKEARI_WORDS);
+    });
+    // AIが同じ概念の属性を別idで生成した場合に重複しないよう除外する
+    const isWakeariLike = a => a.id === "wakeari" || /訳あり|わけあり|ワケあり/.test(a.label || "");
+
     let attrDefs, specFieldDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
     try{
       const ai = await analyzeWithAI(keyword, itemsForAI);
-      const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost").slice(0, 4);
+      const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost" && !isWakeariLike(a)).slice(0, 4);
       attrDefs = [
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+        ...(hasWakeari ? [WAKEARI_ATTR_DEF] : []),
         ...aiAttrs.map((a, i) => ({ id: a.id, label: a.label, defaultChecked: i === 0 })),
       ];
       const aiSpecFields = (ai.specFields || []).filter(f => f.id && f.label).slice(0, 3);
@@ -661,7 +684,8 @@ async function runSearch(){
       aiErrorMessage = e.message;
       attrDefs = [
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
-        ...fallbackAttrDefs(keyword),
+        ...(hasWakeari ? [WAKEARI_ATTR_DEF] : []),
+        ...fallbackAttrDefs(keyword).filter(a => !isWakeariLike(a)),
       ];
       specFieldDefs = FALLBACK_SPEC_FIELDS;
       aiItemsByIndex = null;
