@@ -50,6 +50,12 @@
   .status{font-size:.85rem; color:var(--sub); min-height:1.4em; margin:6px 0 0;}
   .status.err{color:#c0554a;}
 
+  .progress-wrap{
+    width:100%; height:6px; background:var(--line); border-radius:999px;
+    overflow:hidden; margin-top:8px; display:none;
+  }
+  .progress-bar{height:100%; width:0%; background:var(--accent); border-radius:999px; transition:width .25s ease;}
+
   .sort-row{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
   .sort-row .count{font-size:.85rem; color:var(--sub);}
   select{
@@ -123,6 +129,7 @@
       <button id="go">おすすめは？</button>
     </div>
     <p class="status" id="status"></p>
+    <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
   </div>
 
   <div class="panel" id="resultPanel" style="display:none;">
@@ -156,10 +163,35 @@ const resultCountEl = document.getElementById("resultCount");
 const goBtn = document.getElementById("go");
 const prefsContainer = document.getElementById("prefsContainer");
 const sortSelect = document.getElementById("sortSelect");
+const progressWrap = document.getElementById("progressWrap");
+const progressBar = document.getElementById("progressBar");
 
 let currentRows = [];
 let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
 let currentSpecFields = []; // [{id, label}] ジャンルに応じた客観スペック項目（AIが生成、または簡易フォールバック）
+
+// ===== 進捗バー（検索〜AI分析は正確な進捗が分からないため、それらしく進んでいるように見せる擬似的なもの） =====
+let progressTimer = null;
+function startProgress(){
+  clearInterval(progressTimer);
+  progressBar.style.width = "0%";
+  progressWrap.style.display = "block";
+  let pct = 0;
+  progressTimer = setInterval(() => {
+    // 90%までは徐々に近づけ、実際に終わるまで100%にはしない（応答待ちであることが分かるように）
+    pct += (90 - pct) * 0.12 + 0.5;
+    if(pct > 90) pct = 90;
+    progressBar.style.width = pct.toFixed(1) + "%";
+  }, 200);
+}
+function finishProgress(){
+  clearInterval(progressTimer);
+  progressBar.style.width = "100%";
+  setTimeout(() => {
+    progressWrap.style.display = "none";
+    progressBar.style.width = "0%";
+  }, 350);
+}
 
 // ===== 自分のサーバー（中継API）への問い合わせ =====
 async function apiRequest(params){
@@ -321,6 +353,17 @@ function renderPrefPanel(attrDefs){
     const checked = a.defaultChecked ? "checked" : "";
     return `<div class="pref"><label><input type="checkbox" id="pref_${a.id}" ${checked}> ${a.label}</label></div>`;
   }).join("");
+  // チェックボックスを切り替えたら、その場でスコアを再計算して並び替え直す
+  attrDefs.forEach(a => {
+    const cb = document.getElementById(`pref_${a.id}`);
+    if(cb) cb.addEventListener("change", onPrefChange);
+  });
+}
+
+function onPrefChange(){
+  if(currentRows.length === 0) return;
+  computeScores(currentRows, currentAttrDefs);
+  sortAndRender();
 }
 
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
@@ -561,6 +604,7 @@ async function runSearch(){
   statusEl.textContent = "検索中…";
   resultPanel.style.display = "none";
   prefsContainer.innerHTML = `<span class="prefs-empty">分析中…</span>`;
+  startProgress();
 
   try{
     const data = await apiRequest({ keyword, hits: 20 });
@@ -634,6 +678,7 @@ async function runSearch(){
     prefsContainer.innerHTML = `<span class="prefs-empty">検索するとここに項目が表示されます。</span>`;
   }finally{
     goBtn.disabled = false;
+    finishProgress();
   }
 }
 
