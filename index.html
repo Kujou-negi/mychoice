@@ -139,6 +139,21 @@
   .p-rating{font-size:.76rem; margin-top:4px; white-space:nowrap;}
   .p-rating .count{color:var(--text-sub); font-weight:400;}
   @media (max-width:520px){ .p-side{width:90px;} .p-price{font-size:.92rem;} }
+
+  .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
+  .exclude-list .filter-item input{accent-color:var(--price);}
+
+  .skeleton-list{display:flex; flex-direction:column; gap:14px; margin-top:12px;}
+  .skeleton-row{
+    height:104px; border-radius:4px;
+    background:linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%);
+    background-size:200% 100%;
+    animation:skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes skeleton-shimmer{
+    0%{background-position:200% 0;}
+    100%{background-position:-200% 0;}
+  }
 </style>
 </head>
 <body class="home">
@@ -156,11 +171,18 @@
   <aside class="sidebar">
     <h2>絞り込み</h2>
     <div class="filter-list" id="prefsContainer"><p class="empty-note">検索すると表示されます</p></div>
+    <div class="exclude-list" id="excludeContainer"></div>
   </aside>
 
   <main class="main">
     <p class="status" id="status"></p>
     <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="skeleton-list" id="skeletonList" style="display:none;">
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+    </div>
 
     <div id="resultPanel" style="display:none;">
       <div class="result-bar">
@@ -186,13 +208,16 @@ const cardsEl = document.getElementById("cards");
 const resultCountEl = document.getElementById("resultCount");
 const goBtn = document.getElementById("go");
 const prefsContainer = document.getElementById("prefsContainer");
+const excludeContainer = document.getElementById("excludeContainer");
 const sortSelect = document.getElementById("sortSelect");
 const progressWrap = document.getElementById("progressWrap");
 const progressBar = document.getElementById("progressBar");
+const skeletonList = document.getElementById("skeletonList");
 
 let currentRows = [];
 let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
 let currentSpecFields = []; // [{id, label}] ジャンルに応じた客観スペック項目（AIが生成、または簡易フォールバック）
+let excludeWakeari = false; // 「訳あり品を除外する」チェックの状態
 
 // ===== 進捗バー（検索〜AI分析は正確な進捗が分からないため、それらしく進んでいるように見せる擬似的なもの） =====
 let progressTimer = null;
@@ -253,16 +278,15 @@ const HANDMADE_WORDS = ["手作り", "手造り", "職人", "小規模生産", "
 const WAKEARI_WORDS = ["訳あり", "わけあり", "ワケあり", "訳アリ", "規格外", "不揃い"];
 
 const FALLBACK_ATTRS = {
-  additive:  { label: "無添加を重視する", words: ADDITIVE_WORDS },
-  domestic:  { label: "国産（日本）を重視する", words: DOMESTIC_WORDS },
-  organic:   { label: "オーガニック・有機栽培を重視する", words: ORGANIC_WORDS },
-  fairtrade: { label: "フェアトレードを重視する", words: FAIRTRADE_WORDS },
-  decaf:     { label: "カフェインレス・デカフェを重視する", words: DECAF_WORDS },
-  handmade:  { label: "手作り・小規模生産を重視する", words: HANDMADE_WORDS },
-  wakeari:   { label: "訳あり品でも気にしない", words: WAKEARI_WORDS },
+  additive:  { label: "無添加", words: ADDITIVE_WORDS },
+  domestic:  { label: "国産（日本）", words: DOMESTIC_WORDS },
+  organic:   { label: "オーガニック・有機栽培", words: ORGANIC_WORDS },
+  fairtrade: { label: "フェアトレード", words: FAIRTRADE_WORDS },
+  decaf:     { label: "カフェインレス・デカフェ", words: DECAF_WORDS },
+  handmade:  { label: "手作り・小規模生産", words: HANDMADE_WORDS },
 };
-// 「訳あり」は食品の検索結果に実際に混ざっているときだけ、絞り込み項目として追加する
-const WAKEARI_ATTR_DEF = { id: "wakeari", label: FALLBACK_ATTRS.wakeari.label, defaultChecked: false };
+// 「訳あり」はスコアで重み付けする好み属性ではなく、該当商品を一覧から除外する専用チェックとして扱う
+// （絞り込み項目としてではなく、実際に検索結果に混ざっているときだけ excludeContainer に表示する。renderExcludePanel参照）
 const FALLBACK_GENRE_MAP = [
   { match: ["梅シロップ", "梅干し", "梅酒", "梅"], attrs: ["additive", "domestic", "handmade"] },
   { match: ["はちみつ", "蜂蜜", "ハチミツ"], attrs: ["additive", "domestic", "organic"] },
@@ -403,6 +427,22 @@ function onPrefChange(){
   sortAndRender();
 }
 
+// ===== 「訳あり品を除外する」欄の描画（実際に訳あり品が混ざっているときだけ表示する） =====
+function renderExcludePanel(rows){
+  const hasWakeari = rows.some(r => r.wakeari);
+  if(!hasWakeari){
+    excludeContainer.innerHTML = "";
+    excludeWakeari = false;
+    return;
+  }
+  excludeContainer.innerHTML = `<label class="filter-item"><input type="checkbox" id="excludeWakeariCb" ${excludeWakeari ? "checked" : ""}> 訳あり品を除外する</label>`;
+  const cb = document.getElementById("excludeWakeariCb");
+  cb.addEventListener("change", () => {
+    excludeWakeari = cb.checked;
+    sortAndRender();
+  });
+}
+
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
 // specFieldDefs: [{id,label}] ジャンルに応じた客観スペック項目（AIが生成、またはFALLBACK_SPEC_FIELDS）
 function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
@@ -452,10 +492,8 @@ function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, igno
       });
     }
 
-    // 「訳あり」はAIの判定に頼らず、常にキーワード検出で確実に判定する
-    if(attrDefs.some(a => a.id === "wakeari")){
-      attrHits.wakeari = matchesWords(text, WAKEARI_WORDS);
-    }
+    // 「訳あり」はAIの判定やジャンル判定に頼らず、ジャンルを問わず常にキーワード検出で確実に判定する
+    const wakeari = matchesWords(text, WAKEARI_WORDS);
 
     const perUnit = qty ? item.itemPrice / qty.value : null;
 
@@ -468,7 +506,7 @@ function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, igno
       price: item.itemPrice,
       shipping: detectShipping(item),
       qty, perUnit,
-      specValues, attrHits,
+      specValues, attrHits, wakeari,
       rating: item.reviewAverage || null,
       reviews: item.reviewCount || 0,
     });
@@ -496,6 +534,7 @@ function mergeRowInfo(base, other){
   if(!merged.image && other.image) merged.image = other.image;
   if((merged.rating === null || merged.rating === undefined) && other.rating != null) merged.rating = other.rating;
   if(!merged.reviews && other.reviews) merged.reviews = other.reviews;
+  merged.wakeari = !!(base.wakeari || other.wakeari); // どちらかで訳あり検出されていれば訳ありとみなす
   merged.attrHits = { ...other.attrHits, ...base.attrHits };
   // どちらかで検出されていればOKとする（陽性シグナルを優先）
   Object.keys(other.attrHits || {}).forEach(k => {
@@ -557,10 +596,11 @@ function computeScores(rows, attrDefs){
 function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
 
 function renderCards(rows, excludedInfo){
-  const { relevance = 0, duplicates = 0 } = excludedInfo || {};
+  const { relevance = 0, duplicates = 0, wakeari = 0 } = excludedInfo || {};
   const notes = [];
   if(relevance) notes.push(`関連性が低いと判定された${relevance}件`);
   if(duplicates) notes.push(`重複していた${duplicates}件`);
+  if(wakeari) notes.push(`訳あり品${wakeari}件`);
   resultCountEl.textContent = notes.length
     ? `${rows.length}件（${notes.join("、")}を除外）`
     : `${rows.length}件`;
@@ -581,8 +621,7 @@ function renderCards(rows, excludedInfo){
       .filter(a => a.id !== "cost")
       .map(a => {
         const hit = r.attrHits[a.id];
-        const shortLabel = a.label.replace(/を重視する$/, "");
-        return `<span class="${hit ? "hit" : "miss"}">${hit ? "○" : "×"} ${shortLabel}</span>`;
+        return `<span class="${hit ? "hit" : "miss"}">${hit ? "○" : "×"} ${a.label}</span>`;
       }).join("");
 
     const metaBits = [];
@@ -618,13 +657,16 @@ function renderCards(rows, excludedInfo){
 
 function sortAndRender(){
   const key = sortSelect.value;
-  const rows = [...currentRows].sort((a,b) => {
+  const wakeariExcludedCount = excludeWakeari ? currentRows.filter(r => r.wakeari).length : 0;
+  const base = excludeWakeari ? currentRows.filter(r => !r.wakeari) : currentRows;
+  const rows = [...base].sort((a,b) => {
     if(key === "price") return a.price - b.price;
     if(key === "rating") return (b.rating||0) - (a.rating||0);
     if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
     return (b.score||0) - (a.score||0);
   });
-  renderCards(rows, sortAndRender.excludedInfo);
+  const info = { ...(sortAndRender.excludedInfo || {}), wakeari: wakeariExcludedCount };
+  renderCards(rows, info);
 }
 sortSelect.addEventListener("change", sortAndRender);
 
@@ -637,6 +679,8 @@ async function runSearch(){
   statusEl.textContent = "検索中…";
   resultPanel.style.display = "none";
   prefsContainer.innerHTML = `<p class="empty-note">分析中…</p>`;
+  excludeContainer.innerHTML = "";
+  skeletonList.style.display = "flex";
   startProgress();
 
   try{
@@ -645,6 +689,7 @@ async function runSearch(){
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
       prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
+      skeletonList.style.display = "none";
       return;
     }
 
@@ -659,12 +704,8 @@ async function runSearch(){
 
     statusEl.textContent = "AIでジャンルを分析中…";
 
-    // 「訳あり」は食品ジャンルで、実際に検索結果に混ざっているときだけ絞り込み項目に追加する
-    const hasWakeari = isFoodKeyword(keyword) && items.some(it => {
-      const item = it.Item || it;
-      return matchesWords(`${item.itemName || ""} ${item.itemCaption || ""}`, WAKEARI_WORDS);
-    });
-    // AIが同じ概念の属性を別idで生成した場合に重複しないよう除外する
+    // 「訳あり」は独立した除外専用チェックとして扱うため、AIが同じ概念の属性を別idで生成しても
+    // 好みプロフィール（attrDefs）には含めない（重複除外）
     const isWakeariLike = a => a.id === "wakeari" || /訳あり|わけあり|ワケあり/.test(a.label || "");
 
     let attrDefs, specFieldDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
@@ -673,7 +714,6 @@ async function runSearch(){
       const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost" && !isWakeariLike(a)).slice(0, 4);
       attrDefs = [
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
-        ...(hasWakeari ? [WAKEARI_ATTR_DEF] : []),
         ...aiAttrs.map((a, i) => ({ id: a.id, label: a.label, defaultChecked: i === 0 })),
       ];
       const aiSpecFields = (ai.specFields || []).filter(f => f.id && f.label).slice(0, 3);
@@ -684,7 +724,6 @@ async function runSearch(){
       aiErrorMessage = e.message;
       attrDefs = [
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
-        ...(hasWakeari ? [WAKEARI_ATTR_DEF] : []),
         ...fallbackAttrDefs(keyword).filter(a => !isWakeariLike(a)),
       ];
       specFieldDefs = FALLBACK_SPEC_FIELDS;
@@ -706,8 +745,10 @@ async function runSearch(){
     const { rows, duplicates } = dedupeRows(builtRows);
     computeScores(rows, attrDefs);
     currentRows = rows;
+    renderExcludePanel(rows);
     sortAndRender.excludedInfo = { relevance: relevanceIgnored ? 0 : excluded, duplicates };
     sortAndRender();
+    skeletonList.style.display = "none";
     resultPanel.style.display = "block";
 
     statusEl.textContent = aiFailed
@@ -719,6 +760,7 @@ async function runSearch(){
     statusEl.className = "status err";
     statusEl.textContent = "エラー: " + e.message;
     prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
+    skeletonList.style.display = "none";
   }finally{
     goBtn.disabled = false;
     finishProgress();
