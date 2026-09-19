@@ -61,19 +61,26 @@
   .product-card{
     background:var(--card); border:1px solid var(--line); border-radius:14px;
     padding:14px 16px;
+    display:grid; grid-template-columns:minmax(120px, 34%) 1fr; gap:14px;
   }
-  .pcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
-  .pcard-main{display:flex; gap:12px; align-items:flex-start; flex:1; min-width:0;}
-  .pcard-thumb{
-    flex-shrink:0; width:72px; height:72px; border-radius:10px; overflow:hidden;
-    background:var(--bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+  @media (max-width:480px){
+    .product-card{ grid-template-columns:1fr; }
   }
-  .pcard-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
-  .pcard-thumb.empty{color:var(--sub); font-size:.7rem; text-align:center; padding:4px;}
+
+  .pcard-media{display:flex; flex-direction:column; gap:8px; min-width:0;}
   .pcard-name{font-weight:700; font-size:1rem; line-height:1.4;}
   .pcard-name a{color:var(--ink); text-decoration:none;}
   .pcard-name a:hover{text-decoration:underline;}
-  .pcard-shop{color:var(--sub); font-size:.8rem; margin-top:3px;}
+  .pcard-thumb{
+    display:block; width:100%; aspect-ratio:1/1; border-radius:10px; overflow:hidden;
+    background:var(--bg); border:1px solid var(--line);
+  }
+  .pcard-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .pcard-thumb.empty{color:var(--sub); font-size:.75rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;}
+
+  .pcard-body{min-width:0; display:flex; flex-direction:column;}
+  .pcard-body-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+  .pcard-shop{color:var(--sub); font-size:.8rem; margin-top:2px;}
   .pcard-score{
     flex-shrink:0; text-align:center; background:var(--bg); border:1px solid var(--line);
     border-radius:10px; padding:6px 12px; min-width:64px;
@@ -82,7 +89,7 @@
   .pcard-score .lbl{font-size:.7rem; color:var(--sub);}
 
   .pcard-grid{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr));
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr));
     gap:10px 16px; margin:12px 0 4px; padding-top:10px; border-top:1px solid var(--line);
   }
   .field .flabel{font-size:.72rem; color:var(--sub); margin-bottom:2px;}
@@ -344,6 +351,35 @@ function buildRows(items, attrDefs, aiItemsByIndex){
   return { rows, excluded };
 }
 
+// ほぼ同じ商品（同じ画像、または同じ商品名・価格・容量）が別の店舗名で重複して出てくることがあるため、まとめる
+function dedupeRows(rows){
+  const seen = new Map();
+  const kept = [];
+  let duplicates = 0;
+
+  rows.forEach(r => {
+    const normName = (r.displayName || r.name || "").replace(/[\s　]/g, "");
+    const key = r.image
+      ? `img:${r.image}`
+      : `name:${normName}|${r.price}|${r.qty ? r.qty.value + r.qty.unit : ""}`;
+
+    if(seen.has(key)){
+      duplicates++;
+      const existingIdx = seen.get(key);
+      const existing = kept[existingIdx];
+      // 口コミ件数が多い方（＝より実績があり信頼できそうな方）を代表として残す
+      if((r.reviews || 0) > (existing.reviews || 0)){
+        kept[existingIdx] = r;
+      }
+    }else{
+      seen.set(key, kept.length);
+      kept.push(r);
+    }
+  });
+
+  return { rows: kept, duplicates };
+}
+
 function computeScores(rows, attrDefs){
   const knownPerUnit = rows.map(r => r.perUnit).filter(v => v !== null && v !== undefined);
   const maxPerUnit = Math.max(...knownPerUnit, 1);
@@ -369,9 +405,13 @@ function computeScores(rows, attrDefs){
 
 function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
 
-function renderCards(rows, excludedCount){
-  resultCountEl.textContent = excludedCount
-    ? `${rows.length}件（関連性が低いと判定された${excludedCount}件を除外）`
+function renderCards(rows, excludedInfo){
+  const { relevance = 0, duplicates = 0 } = excludedInfo || {};
+  const notes = [];
+  if(relevance) notes.push(`関連性が低いと判定された${relevance}件`);
+  if(duplicates) notes.push(`重複していた${duplicates}件`);
+  resultCountEl.textContent = notes.length
+    ? `${rows.length}件（${notes.join("、")}を除外）`
     : `${rows.length}件`;
 
   cardsEl.innerHTML = rows.map(r => {
@@ -391,44 +431,45 @@ function renderCards(rows, excludedCount){
 
     return `
     <div class="product-card">
-      <div class="pcard-top">
-        <div class="pcard-main">
-          ${thumb}
-          <div>
-            <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
-            <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
+      <div class="pcard-media">
+        <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
+        ${thumb}
+      </div>
+
+      <div class="pcard-body">
+        <div class="pcard-body-top">
+          <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
+          <div class="pcard-score">
+            <span class="num">${(r.score * 100).toFixed(0)}</span>
+            <span class="lbl">総合スコア</span>
           </div>
         </div>
-        <div class="pcard-score">
-          <span class="num">${(r.score * 100).toFixed(0)}</span>
-          <span class="lbl">総合スコア</span>
+
+        <div class="pcard-grid">
+          <div class="field">
+            <div class="flabel">容量</div>
+            <div class="fvalue ${r.qty ? "" : "muted"}">${qtyValue}</div>
+          </div>
+          <div class="field">
+            <div class="flabel">容器</div>
+            <div class="fvalue ${r.packaging ? "" : "muted"}">${r.packaging || "—"}</div>
+          </div>
+          <div class="field">
+            <div class="flabel">値段</div>
+            <div class="fvalue">${fmtYen(r.price)}</div>
+            <div class="fsub">${perUnitValue}</div>
+          </div>
+          <div class="field">
+            <div class="flabel">口コミ</div>
+            <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
+            <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
+          </div>
         </div>
+
+        <div class="ingredients"><b>原材料：</b>${r.ingredients || "記載を検出できませんでした"}</div>
+
+        <div class="chips">${chips}</div>
       </div>
-
-      <div class="pcard-grid">
-        <div class="field">
-          <div class="flabel">容量</div>
-          <div class="fvalue ${r.qty ? "" : "muted"}">${qtyValue}</div>
-        </div>
-        <div class="field">
-          <div class="flabel">容器</div>
-          <div class="fvalue ${r.packaging ? "" : "muted"}">${r.packaging || "—"}</div>
-        </div>
-        <div class="field">
-          <div class="flabel">値段</div>
-          <div class="fvalue">${fmtYen(r.price)}</div>
-          <div class="fsub">${perUnitValue}</div>
-        </div>
-        <div class="field">
-          <div class="flabel">口コミ</div>
-          <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
-          <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
-        </div>
-      </div>
-
-      <div class="ingredients"><b>原材料：</b>${r.ingredients || "記載を検出できませんでした"}</div>
-
-      <div class="chips">${chips}</div>
     </div>
     `;
   }).join("");
@@ -442,7 +483,7 @@ function sortAndRender(){
     if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
     return (b.score||0) - (a.score||0);
   });
-  renderCards(rows, sortAndRender.excludedCount || 0);
+  renderCards(rows, sortAndRender.excludedInfo);
 }
 sortSelect.addEventListener("change", sortAndRender);
 
@@ -496,10 +537,11 @@ async function runSearch(){
 
     renderPrefPanel(attrDefs);
 
-    const { rows, excluded } = buildRows(items, attrDefs, aiItemsByIndex);
+    const { rows: builtRows, excluded } = buildRows(items, attrDefs, aiItemsByIndex);
+    const { rows, duplicates } = dedupeRows(builtRows);
     computeScores(rows, attrDefs);
     currentRows = rows;
-    sortAndRender.excludedCount = excluded;
+    sortAndRender.excludedInfo = { relevance: excluded, duplicates };
     sortAndRender();
     resultPanel.style.display = "block";
 
