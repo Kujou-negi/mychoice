@@ -6,140 +6,161 @@
 <title>マイチョイス</title>
 <style>
   :root{
-    --bg:#faf7f2; --card:#ffffff; --ink:#2b2620; --sub:#6b6258;
-    --line:#e7e0d5; --accent:#7a8f5c; --accent-ink:#3f4a30;
-    --good:#5a8f5a; --warn:#b8860b;
+    --bg:#f2f3f5; --surface:#ffffff; --text:#16181c; --text-sub:#6b7280;
+    --border:#e2e4e8; --accent:#1a56db; --accent-hover:#154cc4;
+    --price:#c1272d; --good:#1a7f37; --bad:#9aa0a6;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#1c1a17; --card:#26231f; --ink:#ede7dd; --sub:#b0a89a;
-      --line:#3a352d; --accent:#9cb27d; --accent-ink:#c8dab0;
-      --good:#8fc98f; --warn:#e0b84f; }
+    :root{
+      --bg:#101216; --surface:#1a1d23; --text:#e8e9eb; --text-sub:#9aa0a6;
+      --border:#2b2f38; --accent:#5b9dff; --accent-hover:#7cb0ff;
+      --price:#ff6b6b; --good:#4ade80; --bad:#6b7280;
+    }
   }
   *{box-sizing:border-box;}
   body{
-    margin:0; padding:24px 16px 60px; background:var(--bg); color:var(--ink);
+    margin:0; background:var(--bg); color:var(--text);
     font-family:"Hiragino Sans","Yu Gothic",system-ui,-apple-system,sans-serif;
   }
-  .wrap{max-width:960px; margin:0 auto;}
-  h1{font-size:1.2rem; margin:0 0 14px;}
+  a{color:inherit;}
 
-  .panel{
-    background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:14px 16px; margin-bottom:14px;
+  .topbar{background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;}
+  .topbar-inner{
+    max-width:1080px; margin:0 auto; padding:12px 16px;
+    display:flex; align-items:center; gap:20px;
   }
-  .panel h2{font-size:.9rem; margin:0 0 8px; color:var(--accent-ink);}
-  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
-  .search-row input[type=text]{
-    flex:1; min-width:200px; padding:10px 12px; border-radius:10px;
-    border:1px solid var(--line); background:var(--bg); color:var(--ink); font-size:.95rem;
+  .brand{font-size:1rem; font-weight:800; letter-spacing:.02em; text-decoration:none; white-space:nowrap;}
+  .searchbox{flex:1; max-width:460px; display:flex;}
+  .searchbox input{
+    flex:1; min-width:0; padding:8px 12px; font-size:.88rem;
+    border:1px solid var(--border); border-right:none; border-radius:4px 0 0 4px;
+    background:var(--bg); color:var(--text);
   }
-  button{
-    padding:10px 18px; border-radius:10px; border:none; background:var(--accent);
-    color:#fff; font-weight:600; cursor:pointer; font-size:.92rem;
+  .searchbox input:focus{outline:none; border-color:var(--accent);}
+  .searchbox button{
+    padding:8px 18px; border:none; border-radius:0 4px 4px 0; background:var(--accent);
+    color:#fff; font-weight:600; font-size:.85rem; cursor:pointer; white-space:nowrap;
   }
-  button:hover{opacity:.9;}
-  button:disabled{opacity:.5; cursor:default;}
+  .searchbox button:hover{background:var(--accent-hover);}
+  .searchbox button:disabled{opacity:.5; cursor:default;}
 
-  .prefs{display:flex; gap:18px; flex-wrap:wrap; font-size:.88rem;}
-  .pref label{display:flex; align-items:center; gap:6px; cursor:pointer;}
-  .pref input[type=checkbox]{width:16px; height:16px;}
-  .prefs-empty{color:var(--sub); font-size:.85rem;}
+  .layout{
+    max-width:1080px; margin:0 auto; padding:20px 16px 60px;
+    display:flex; align-items:flex-start; gap:28px;
+  }
+  .sidebar{width:200px; flex-shrink:0;}
+  @media (max-width:800px){
+    .layout{flex-direction:column; gap:16px;}
+    .sidebar{width:100%;}
+  }
 
-  .status{font-size:.85rem; color:var(--sub); min-height:1.4em; margin:6px 0 0;}
-  .status.err{color:#c0554a;}
+  .sidebar h2{
+    font-size:.82rem; font-weight:700; margin:0 0 8px; padding-bottom:6px;
+    border-bottom:1px solid var(--border);
+  }
+  .filter-list{display:flex; flex-direction:column; gap:1px; font-size:.83rem;}
+  .filter-item{display:flex; align-items:center; gap:7px; padding:5px 2px; cursor:pointer;}
+  .filter-item input{width:14px; height:14px; accent-color:var(--accent); flex-shrink:0;}
+  .empty-note{color:var(--text-sub); font-size:.8rem; margin:0;}
+
+  .main{flex:1; min-width:0;}
+  .status{font-size:.8rem; color:var(--text-sub); min-height:1.2em; margin:0;}
+  .status.err{color:#c0392b;}
 
   .progress-wrap{
-    width:100%; height:6px; background:var(--line); border-radius:999px;
-    overflow:hidden; margin-top:8px; display:none;
+    width:100%; height:3px; background:var(--border); overflow:hidden;
+    margin:6px 0 4px; display:none;
   }
-  .progress-bar{height:100%; width:0%; background:var(--accent); border-radius:999px; transition:width .25s ease;}
+  .progress-bar{height:100%; width:0%; background:var(--accent); transition:width .25s ease;}
 
-  .sort-row{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
-  .sort-row .count{font-size:.85rem; color:var(--sub);}
+  .result-bar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border);
+    font-size:.8rem;
+  }
+  .result-count{color:var(--text-sub);}
   select{
-    padding:8px 10px; border-radius:10px; border:1px solid var(--line);
-    background:var(--card); color:var(--ink); font-size:.85rem;
+    padding:5px 8px; border:1px solid var(--border); border-radius:4px;
+    background:var(--surface); color:var(--text); font-size:.8rem;
   }
 
-  .cards{display:flex; flex-direction:column; gap:10px;}
-  .product-card{
-    background:var(--card); border:1px solid var(--line); border-radius:12px;
-    padding:10px 12px;
-    display:grid; grid-template-columns:minmax(100px, 30%) 1fr; gap:10px;
+  .product-list{list-style:none; margin:0; padding:0;}
+  .product-row{display:flex; gap:12px; padding:14px 2px; border-bottom:1px solid var(--border);}
+
+  .p-thumb{
+    flex-shrink:0; width:104px; height:104px; display:block; overflow:hidden;
+    border:1px solid var(--border); border-radius:4px; background:var(--surface);
   }
-  @media (max-width:480px){
-    .product-card{ grid-template-columns:1fr; }
+  .p-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .p-thumb.empty{
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    color:var(--text-sub); font-size:.68rem; padding:6px;
   }
+  @media (max-width:520px){ .p-thumb{width:76px; height:76px;} }
 
-  .pcard-media{display:flex; flex-direction:column; gap:6px; min-width:0;}
-  .pcard-name{font-weight:700; font-size:.88rem; line-height:1.35;}
-  .pcard-name a{color:var(--ink); text-decoration:none;}
-  .pcard-name a:hover{text-decoration:underline;}
-  .pcard-thumb{
-    display:block; width:100%; aspect-ratio:1/1; border-radius:8px; overflow:hidden;
-    background:var(--bg); border:1px solid var(--line);
+  .p-info{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+  .p-name{font-size:.88rem; font-weight:600; line-height:1.4;}
+  .p-name a{text-decoration:none;}
+  .p-name a:hover{color:var(--accent); text-decoration:underline;}
+  .p-meta{font-size:.76rem; color:var(--text-sub);}
+  .p-meta .origin{font-weight:700; color:var(--text); margin-right:8px;}
+  .p-feature{font-size:.76rem; color:var(--text-sub);}
+  .p-specs{font-size:.76rem; color:var(--text-sub);}
+  .p-specs span{margin-right:12px; white-space:nowrap;}
+  .p-specs b{color:var(--text); font-weight:600;}
+  .p-attrs{font-size:.74rem; margin-top:2px;}
+  .p-attrs span{margin-right:10px; white-space:nowrap;}
+  .p-attrs .hit{color:var(--good);}
+  .p-attrs .miss{color:var(--bad);}
+  .p-shop{font-size:.72rem; color:var(--text-sub); margin-top:2px;}
+
+  .p-side{
+    flex-shrink:0; width:118px; text-align:right;
+    display:flex; flex-direction:column; align-items:flex-end; gap:2px;
   }
-  .pcard-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
-  .pcard-thumb.empty{color:var(--sub); font-size:.72rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;}
-
-  .pcard-body{min-width:0; display:flex; flex-direction:column;}
-  .pcard-body-top{display:flex; flex-direction:column; gap:1px;}
-  .pcard-origin{font-size:1rem; font-weight:700; color:var(--accent-ink); line-height:1.25;}
-  .pcard-maker{font-size:.78rem; color:var(--ink); font-weight:600;}
-  .pcard-feature{font-size:.75rem; color:var(--sub); line-height:1.4; margin-top:1px;}
-
-  .pcard-grid{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(100px,1fr));
-    gap:6px 12px; margin:8px 0 2px; padding-top:8px; border-top:1px solid var(--line);
-  }
-  .field .flabel{font-size:.68rem; color:var(--sub); margin-bottom:1px;}
-  .field .fvalue{font-size:.82rem; font-weight:600;}
-  .field .fvalue.muted{font-weight:400; color:var(--sub);}
-  .field .fvalue.ship-free{color:var(--good);}
-  .field .fsub{font-size:.7rem; color:var(--sub); font-weight:400; margin-top:1px;}
-
-  .chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:8px;}
-  .tag{display:inline-block; padding:1px 8px; border-radius:999px; font-size:.72em; font-weight:600;}
-  .tag.good{background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good);}
-  .tag.warn{background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn);}
-  .tag.ai{background:color-mix(in srgb, var(--accent) 20%, transparent); color:var(--accent-ink);}
-
-  .pcard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:.75rem; color:var(--sub);}
+  .p-price{font-size:1.05rem; font-weight:800; color:var(--price); white-space:nowrap;}
+  .p-perunit{font-size:.7rem; color:var(--text-sub);}
+  .p-shipping{font-size:.7rem; color:var(--text-sub);}
+  .p-shipping.free{color:var(--good); font-weight:600;}
+  .p-rating{font-size:.76rem; margin-top:4px; white-space:nowrap;}
+  .p-rating .count{color:var(--text-sub); font-weight:400;}
+  @media (max-width:520px){ .p-side{width:90px;} .p-price{font-size:.92rem;} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>マイチョイス</h1>
-
-  <div class="panel">
-    <h2>絞り込み</h2>
-    <div class="prefs" id="prefsContainer"><span class="prefs-empty">検索するとここに項目が表示されます。</span></div>
-  </div>
-
-  <div class="panel">
-    <div class="row search-row">
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">マイチョイス</span>
+    <div class="searchbox">
       <input type="text" id="q" value="梅シロップ" />
-      <button id="go">おすすめは？</button>
+      <button id="go">検索</button>
     </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <h2>絞り込み</h2>
+    <div class="filter-list" id="prefsContainer"><p class="empty-note">検索すると表示されます</p></div>
+  </aside>
+
+  <main class="main">
     <p class="status" id="status"></p>
     <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
-  </div>
 
-  <div class="panel" id="resultPanel" style="display:none;">
-    <div class="sort-row">
-      <span class="count" id="resultCount"></span>
-      <label style="font-size:.85rem; color:var(--sub); display:flex; align-items:center; gap:6px;">
-        並び替え:
+    <div id="resultPanel" style="display:none;">
+      <div class="result-bar">
+        <span class="result-count" id="resultCount"></span>
         <select id="sortSelect">
           <option value="score">おすすめ順</option>
           <option value="perunit">単価が安い順</option>
           <option value="rating">口コミ評価順</option>
           <option value="name">商品名順</option>
         </select>
-      </label>
+      </div>
+      <ul class="product-list" id="cards"></ul>
     </div>
-    <div class="cards" id="cards"></div>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -349,7 +370,7 @@ function renderPrefPanel(attrDefs){
   currentAttrDefs = attrDefs;
   prefsContainer.innerHTML = attrDefs.map(a => {
     const checked = a.defaultChecked ? "checked" : "";
-    return `<div class="pref"><label><input type="checkbox" id="pref_${a.id}" ${checked}> ${a.label}</label></div>`;
+    return `<label class="filter-item"><input type="checkbox" id="pref_${a.id}" ${checked}> ${a.label}</label>`;
   }).join("");
   // チェックボックスを切り替えたら、その場でスコアを再計算して並び替え直す
   attrDefs.forEach(a => {
@@ -522,63 +543,48 @@ function renderCards(rows, excludedInfo){
     : `${rows.length}件`;
 
   cardsEl.innerHTML = rows.map(r => {
-    const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "—";
-    const specFieldsHtml = currentSpecFields.map(f => {
-      const val = (r.specValues || {})[f.id] || "";
-      return `
-          <div class="field">
-            <div class="flabel">${f.label}</div>
-            <div class="fvalue ${val ? "" : "muted"}">${val || "—"}</div>
-          </div>`;
-    }).join("");
-    const chips = currentAttrDefs
+    const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "";
+    const specsLine = currentSpecFields
+      .map(f => {
+        const val = (r.specValues || {})[f.id] || "";
+        return val ? `<span><b>${f.label}</b> ${val}</span>` : "";
+      })
+      .filter(Boolean)
+      .join("");
+    const attrsLine = currentAttrDefs
       .filter(a => a.id !== "cost")
       .map(a => {
         const hit = r.attrHits[a.id];
         const shortLabel = a.label.replace(/を重視する$/, "");
-        return `<span class="tag ${hit ? "good" : "warn"}">${shortLabel}${hit ? "" : "：未検出"}</span>`;
+        return `<span class="${hit ? "hit" : "miss"}">${hit ? "○" : "×"} ${shortLabel}</span>`;
       }).join("");
 
+    const metaBits = [];
+    if(r.origin) metaBits.push(`<span class="origin">${r.origin}</span>`);
+    if(r.maker) metaBits.push(r.maker);
+
     const thumb = r.image
-      ? `<a class="pcard-thumb" href="${r.url}" target="_blank" rel="noopener"><img src="${r.image}" alt="" loading="lazy" onerror="this.closest('.pcard-thumb').outerHTML='&lt;div class=&quot;pcard-thumb empty&quot;&gt;画像なし&lt;/div&gt;'"></a>`
-      : `<div class="pcard-thumb empty">画像なし</div>`;
+      ? `<a class="p-thumb" href="${r.url}" target="_blank" rel="noopener"><img src="${r.image}" alt="" loading="lazy" onerror="this.closest('.p-thumb').outerHTML='&lt;div class=&quot;p-thumb empty&quot;&gt;画像なし&lt;/div&gt;'"></a>`
+      : `<div class="p-thumb empty">画像なし</div>`;
 
     return `
-    <div class="product-card">
-      <div class="pcard-media">
-        <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
-        ${thumb}
+    <li class="product-row">
+      ${thumb}
+      <div class="p-info">
+        <div class="p-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
+        ${metaBits.length ? `<div class="p-meta">${metaBits.join(" ")}</div>` : ""}
+        ${r.feature ? `<div class="p-feature">${r.feature}</div>` : ""}
+        ${specsLine ? `<div class="p-specs">${specsLine}</div>` : ""}
+        ${attrsLine ? `<div class="p-attrs">${attrsLine}</div>` : ""}
+        <div class="p-shop">販売: ${r.shop}</div>
       </div>
-
-      <div class="pcard-body">
-        <div class="pcard-body-top">
-          ${r.origin ? `<div class="pcard-origin">${r.origin}</div>` : ""}
-          ${r.maker ? `<div class="pcard-maker">${r.maker}</div>` : ""}
-          ${r.feature ? `<div class="pcard-feature">${r.feature}</div>` : ""}
-        </div>
-
-        <div class="pcard-grid">
-          <div class="field">
-            <div class="flabel">値段</div>
-            <div class="fvalue">${fmtYen(r.price)}</div>
-            <div class="fsub">${perUnitValue}</div>
-          </div>
-          <div class="field">
-            <div class="flabel">送料</div>
-            <div class="fvalue ${r.shipping ? (r.shipping.free ? "ship-free" : "") : "muted"}">${r.shipping ? r.shipping.label : "—"}</div>
-          </div>
-          <div class="field">
-            <div class="flabel">口コミ</div>
-            <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
-            <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
-          </div>${specFieldsHtml}
-        </div>
-
-        <div class="chips">${chips}</div>
-
-        <div class="pcard-foot"><span>販売: ${r.shop}</span></div>
+      <div class="p-side">
+        <div class="p-price">${fmtYen(r.price)}</div>
+        ${perUnitValue ? `<div class="p-perunit">${perUnitValue}</div>` : ""}
+        <div class="p-shipping ${r.shipping && r.shipping.free ? "free" : ""}">${r.shipping ? r.shipping.label : ""}</div>
+        <div class="p-rating">${r.rating ? `★${r.rating}` : "評価なし"}${r.reviews ? ` <span class="count">(${r.reviews})</span>` : ""}</div>
       </div>
-    </div>
+    </li>
     `;
   }).join("");
 }
@@ -602,7 +608,7 @@ async function runSearch(){
   statusEl.className = "status";
   statusEl.textContent = "検索中…";
   resultPanel.style.display = "none";
-  prefsContainer.innerHTML = `<span class="prefs-empty">分析中…</span>`;
+  prefsContainer.innerHTML = `<p class="empty-note">分析中…</p>`;
   startProgress();
 
   try{
@@ -610,7 +616,7 @@ async function runSearch(){
     const items = data.Items || [];
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
-      prefsContainer.innerHTML = `<span class="prefs-empty">検索するとここに項目が表示されます。</span>`;
+      prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
       return;
     }
 
@@ -674,7 +680,7 @@ async function runSearch(){
   }catch(e){
     statusEl.className = "status err";
     statusEl.textContent = "エラー: " + e.message;
-    prefsContainer.innerHTML = `<span class="prefs-empty">検索するとここに項目が表示されます。</span>`;
+    prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
   }finally{
     goBtn.disabled = false;
     finishProgress();
