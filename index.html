@@ -29,6 +29,7 @@
     padding:16px 18px; margin-bottom:16px;
   }
   .panel h2{font-size:.95rem; margin:0 0 10px; color:var(--accent-ink);}
+  .panel .sub{font-size:.78rem; color:var(--sub); margin:-6px 0 10px;}
   .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
   .search-row input[type=text]{
     flex:1; min-width:200px; padding:10px 12px; border-radius:10px;
@@ -48,21 +49,50 @@
   .status{font-size:.85rem; color:var(--sub); min-height:1.4em; margin:6px 0 0;}
   .status.err{color:#c0554a;}
 
-  table{border-collapse:collapse; width:100%; font-size:.85rem;}
-  th, td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top;}
-  th{cursor:pointer; user-select:none; color:var(--sub); font-weight:600; white-space:nowrap;}
-  th:hover{color:var(--accent-ink);}
-  tr:last-child td{border-bottom:none;}
-  .name{font-weight:600;}
-  .name a{color:var(--ink); text-decoration:none;}
-  .name a:hover{text-decoration:underline;}
-  .shop{color:var(--sub); font-size:.82em; margin-top:2px;}
-  .num{font-variant-numeric:tabular-nums; white-space:nowrap;}
-  .tag{display:inline-block; padding:2px 8px; border-radius:999px; font-size:.78em; font-weight:600;}
+  .sort-row{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
+  .sort-row .count{font-size:.85rem; color:var(--sub);}
+  select{
+    padding:8px 10px; border-radius:10px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:.85rem;
+  }
+
+  .cards{display:flex; flex-direction:column; gap:12px;}
+  .product-card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px;
+  }
+  .pcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+  .pcard-name{font-weight:700; font-size:1rem; line-height:1.4;}
+  .pcard-name a{color:var(--ink); text-decoration:none;}
+  .pcard-name a:hover{text-decoration:underline;}
+  .pcard-shop{color:var(--sub); font-size:.8rem; margin-top:3px;}
+  .pcard-score{
+    flex-shrink:0; text-align:center; background:var(--bg); border:1px solid var(--line);
+    border-radius:10px; padding:6px 12px; min-width:64px;
+  }
+  .pcard-score .num{font-weight:700; font-size:1.1rem; color:var(--accent-ink); display:block;}
+  .pcard-score .lbl{font-size:.7rem; color:var(--sub);}
+
+  .pcard-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr));
+    gap:10px 16px; margin:12px 0 4px; padding-top:10px; border-top:1px solid var(--line);
+  }
+  .field .flabel{font-size:.72rem; color:var(--sub); margin-bottom:2px;}
+  .field .fvalue{font-size:.88rem; font-weight:600;}
+  .field .fvalue.muted{font-weight:400; color:var(--sub);}
+  .field .fsub{font-size:.75rem; color:var(--sub); font-weight:400; margin-top:1px;}
+
+  .ingredients{font-size:.8rem; color:var(--sub); margin-top:8px; line-height:1.6;}
+  .ingredients b{color:var(--ink); font-weight:600;}
+
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;}
+  .tag{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75em; font-weight:600;}
   .tag.good{background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good);}
   .tag.warn{background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn);}
+
+  .pcard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:.8rem; color:var(--sub);}
+
   .note{color:var(--sub); font-size:.85rem; margin-top:14px; line-height:1.7;}
-  .score{font-weight:700; color:var(--accent-ink);}
 </style>
 </head>
 <body>
@@ -72,11 +102,8 @@
 
   <div class="panel">
     <h2>好みプロフィール</h2>
-    <div class="prefs">
-      <div class="pref"><label><input type="checkbox" id="prefCost" checked> コスパ重視（円/mlが安い順を優先）</label></div>
-      <div class="pref"><label><input type="checkbox" id="prefAdditive" checked> 無添加を重視する</label></div>
-      <div class="pref"><label><input type="checkbox" id="prefDomestic"> 国産（日本）を重視する</label></div>
-    </div>
+    <p class="sub">検索キーワードに合わせて、下の項目は自動的に切り替わります。</p>
+    <div class="prefs" id="prefsContainer"></div>
   </div>
 
   <div class="panel">
@@ -89,23 +116,23 @@
   </div>
 
   <div class="panel" id="resultPanel" style="display:none;">
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th data-key="name">商品 ↕</th>
-          <th data-key="perml">円/ml ↕</th>
-          <th data-key="additive">無添加 ↕</th>
-          <th data-key="origin">産地 ↕</th>
-          <th data-key="rating">口コミ ↕</th>
-          <th data-key="score">総合スコア ↕</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="sort-row">
+      <span class="count" id="resultCount"></span>
+      <label style="font-size:.85rem; color:var(--sub); display:flex; align-items:center; gap:6px;">
+        並び替え:
+        <select id="sortSelect">
+          <option value="score">総合スコア順</option>
+          <option value="perunit">単価が安い順</option>
+          <option value="rating">口コミ評価順</option>
+          <option value="name">商品名順</option>
+        </select>
+      </label>
+    </div>
+    <div class="cards" id="cards"></div>
   </div>
 
   <p class="note">
-    「無添加」「産地」は商品名・説明文をこのページ内で簡易的にキーワード検出しているだけです（本文中に「無添加」「化学調味料不使用」などの語があるかを見ているだけで、本当に無添加かどうかをこのページが判定・保証するものではありません）。空欄は「そう書かれていない／読み取れなかった」という意味で、無添加ではないという意味ではありません。円/mlは商品名・説明文からml表記を検出できた場合のみ計算しています（g表記など単位が違う商品は「—」になります）。
+    「無添加」「産地」などの項目は商品名・説明文をこのページ内で簡易的にキーワード検出しているだけです（本当にそうであるかをこのページが判定・保証するものではありません）。空欄は「そう書かれていない／読み取れなかった」という意味で、該当しないという意味ではありません。単価（円/ml・円/gなど）や原材料・容器の種類も、商品名・説明文から自動抽出した参考情報です。抽出できなかった項目は「—」と表示されます。
   </p>
 </div>
 
@@ -114,10 +141,14 @@
 //   ローカルでダブルクリックして開いただけでは実データは取得できません（HTTP_REFERRER_MISSING 等のエラーになります）。
 const statusEl = document.getElementById("status");
 const resultPanel = document.getElementById("resultPanel");
-const tbody = document.querySelector("#tbl tbody");
+const cardsEl = document.getElementById("cards");
+const resultCountEl = document.getElementById("resultCount");
 const goBtn = document.getElementById("go");
+const prefsContainer = document.getElementById("prefsContainer");
+const sortSelect = document.getElementById("sortSelect");
 
 let currentRows = [];
+let currentAttrIds = [];
 
 // 楽天に直接ではなく、自分のサーバー(/api/search)に問い合わせる
 async function apiRequest(params){
@@ -131,115 +162,215 @@ async function apiRequest(params){
   return data;
 }
 
-// ざっくりキーワード検出（本格版ではここをAIによる抽出に置き換える想定）
+// ===== 好みプロフィールの項目（属性）定義 =====
+// ジャンルに応じて、この中から一部だけを画面に出す。
 const ADDITIVE_WORDS = ["無添加", "化学調味料不使用", "保存料不使用", "着色料不使用", "添加物不使用"];
-const DOMESTIC_WORDS = ["国産", "和歌山", "紀州", "南高梅", "長野県産", "群馬県産", "奈良県産", "日本産"];
+const DOMESTIC_WORDS = ["国産", "和歌山", "紀州", "南高梅", "長野県産", "群馬県産", "奈良県産", "日本産", "日本製", "純国産"];
+const ORGANIC_WORDS = ["オーガニック", "有機栽培", "有機JAS", "有機農産物", "無農薬"];
+const FAIRTRADE_WORDS = ["フェアトレード", "フェア・トレード", "Fair Trade", "フェアトレード認証"];
+const DECAF_WORDS = ["デカフェ", "カフェインレス", "ノンカフェイン", "カフェイン0", "カフェインフリー"];
+const HANDMADE_WORDS = ["手作り", "手造り", "職人", "小規模生産", "自家製", "手摘み"];
 
-function detectAdditive(text){
-  return ADDITIVE_WORDS.some(w => text.includes(w));
-}
-function detectOrigin(text){
-  const hit = DOMESTIC_WORDS.find(w => text.includes(w));
-  return hit || "";
-}
-function detectMl(text){
-  const m = text.match(/(\d{2,5})\s*m ?l/i);
-  return m ? Number(m[1]) : null;
+const ATTRS = {
+  cost:      { label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+  additive:  { label: "無添加を重視する", words: ADDITIVE_WORDS, defaultChecked: true },
+  domestic:  { label: "国産（日本）を重視する", words: DOMESTIC_WORDS, defaultChecked: false },
+  organic:   { label: "オーガニック・有機栽培を重視する", words: ORGANIC_WORDS, defaultChecked: false },
+  fairtrade: { label: "フェアトレードを重視する", words: FAIRTRADE_WORDS, defaultChecked: false },
+  decaf:     { label: "カフェインレス・デカフェを重視する", words: DECAF_WORDS, defaultChecked: false },
+  handmade:  { label: "手作り・小規模生産を重視する", words: HANDMADE_WORDS, defaultChecked: false },
+};
+
+// キーワード → どの属性を出すか（最初にマッチしたジャンルを採用。どれにも当たらなければ既定セット）
+const GENRE_MAP = [
+  { match: ["梅シロップ", "梅干し", "梅酒", "梅"], attrs: ["additive", "domestic", "handmade"] },
+  { match: ["はちみつ", "蜂蜜", "ハチミツ"], attrs: ["additive", "domestic", "organic"] },
+  { match: ["コーヒー", "珈琲"], attrs: ["organic", "fairtrade", "decaf"] },
+  { match: ["紅茶", "緑茶", "煎茶", "お茶", "茶葉"], attrs: ["organic", "fairtrade", "domestic"] },
+  { match: ["チョコ", "カカオ", "ショコラ"], attrs: ["fairtrade", "organic", "handmade"] },
+  { match: ["米", "お米", "野菜", "果物", "フルーツ"], attrs: ["domestic", "organic"] },
+  { match: ["醤油", "味噌", "みそ", "塩", "砂糖", "調味料"], attrs: ["additive", "domestic"] },
+];
+const DEFAULT_ATTRS = ["additive", "domestic"];
+
+function getActiveAttrIds(keyword){
+  const hit = GENRE_MAP.find(g => g.match.some(m => keyword.includes(m)));
+  const rest = hit ? hit.attrs : DEFAULT_ATTRS;
+  return ["cost", ...rest];
 }
 
-function normalize(arr){
-  const max = Math.max(...arr, 1);
-  const min = Math.min(...arr, 0);
-  const range = max - min || 1;
-  return arr.map(v => (v - min) / range);
+function renderPrefPanel(keyword){
+  currentAttrIds = getActiveAttrIds(keyword);
+  prefsContainer.innerHTML = currentAttrIds.map(id => {
+    const a = ATTRS[id];
+    const checked = a.defaultChecked ? "checked" : "";
+    return `<div class="pref"><label><input type="checkbox" id="pref_${id}" ${checked}> ${a.label}</label></div>`;
+  }).join("");
+}
+
+// ===== 商品テキストからの属性・情報抽出 =====
+function matchesWords(text, words){
+  return words.some(w => text.includes(w));
+}
+
+const PACKAGING_TYPES = [
+  { label: "瓶", words: ["ガラス瓶", "瓶入り", "びん入り", "瓶"] },
+  { label: "パウチ", words: ["パウチ", "スタンドパウチ", "袋入り"] },
+  { label: "缶", words: ["缶入り", "缶詰", "缶"] },
+  { label: "ペットボトル", words: ["ペットボトル", "PET"] },
+  { label: "箱", words: ["化粧箱", "箱入り", "BOX", "ボックス"] },
+  { label: "パック", words: ["パック"] },
+];
+function detectPackaging(text){
+  const hit = PACKAGING_TYPES.find(p => matchesWords(text, p.words));
+  return hit ? hit.label : "";
+}
+
+function detectIngredients(text){
+  const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
+  return m ? m[1].trim() : "";
+}
+
+// ml/L/g/kg のいずれかを検出し、円/単位が計算できるように正規化する
+function detectQuantity(text){
+  let m = text.match(/(\d+(?:\.\d+)?)\s*m ?l/i);
+  if(m) return { value: Number(m[1]), unit: "ml" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*[lL](?![a-zA-Z])/);
+  if(m) return { value: Number(m[1]) * 1000, unit: "ml" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  if(m) return { value: Number(m[1]) * 1000, unit: "g" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*g(?![a-zA-Z])/i);
+  if(m) return { value: Number(m[1]), unit: "g" };
+  return null;
 }
 
 function computeScoresAndRender(items){
-  const prefCost = document.getElementById("prefCost").checked;
-  const prefAdditive = document.getElementById("prefAdditive").checked;
-  const prefDomestic = document.getElementById("prefDomestic").checked;
-
   const rows = items.map(it => {
     const item = it.Item || it; // APIバージョンによりItemでラップされる場合がある
     const text = `${item.itemName || ""} ${item.itemCaption || ""}`;
-    const ml = detectMl(text);
-    const perml = ml ? item.itemPrice / ml : null;
+    const qty = detectQuantity(text);
+    const perUnit = qty ? item.itemPrice / qty.value : null;
+
+    const attrHits = {};
+    currentAttrIds.forEach(id => {
+      if(id === "cost") return;
+      attrHits[id] = matchesWords(text, ATTRS[id].words);
+    });
+
     return {
       name: item.itemName,
       url: item.itemUrl,
       shop: item.shopName,
       price: item.itemPrice,
-      ml, perml,
-      additive: detectAdditive(text),
-      origin: detectOrigin(text),
+      qty, perUnit,
+      packaging: detectPackaging(text),
+      ingredients: detectIngredients(text),
+      attrHits,
       rating: item.reviewAverage || null,
       reviews: item.reviewCount || 0,
     };
   });
 
-  // コスパ用スコア（円/mlが低いほど高スコア。検出できないものは中間点）
-  const perMlValues = rows.map(r => r.perml ?? null);
-  const knownPerMl = perMlValues.filter(v => v !== null);
-  const maxPerMl = Math.max(...knownPerMl, 1);
-  const minPerMl = Math.min(...knownPerMl, 0);
+  // コスパ用スコア（単価が低いほど高スコア。検出できないものは中間点）
+  const knownPerUnit = rows.map(r => r.perUnit).filter(v => v !== null && v !== undefined);
+  const maxPerUnit = Math.max(...knownPerUnit, 1);
+  const minPerUnit = Math.min(...knownPerUnit, 0);
 
   rows.forEach(r => {
     let costScore = 0.5;
-    if(r.perml !== null && maxPerMl > minPerMl){
-      costScore = 1 - (r.perml - minPerMl) / (maxPerMl - minPerMl);
+    if(r.perUnit !== null && maxPerUnit > minPerUnit){
+      costScore = 1 - (r.perUnit - minPerUnit) / (maxPerUnit - minPerUnit);
     }
     let score = 0;
     let weightSum = 0;
-    if(prefCost){ score += costScore; weightSum += 1; }
-    if(prefAdditive){ score += (r.additive ? 1 : 0.3); weightSum += 1; }
-    if(prefDomestic){ score += (r.origin ? 1 : 0.3); weightSum += 1; }
+    currentAttrIds.forEach(id => {
+      const cb = document.getElementById(`pref_${id}`);
+      if(!cb || !cb.checked) return;
+      weightSum += 1;
+      if(id === "cost"){ score += costScore; }
+      else { score += (r.attrHits[id] ? 1 : 0.3); }
+    });
     r.score = weightSum ? score / weightSum : costScore;
+    r.costScore = costScore;
   });
 
   currentRows = rows;
-  renderRows([...rows].sort((a,b) => b.score - a.score));
+  sortAndRender();
   resultPanel.style.display = "block";
 }
 
 function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
 
-function renderRows(rows){
-  tbody.innerHTML = "";
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>
-        <div class="name"><a href="${r.url}" target="_blank" rel="noopener">${r.name}</a></div>
-        <div class="shop">${r.shop} ・ ${fmtYen(r.price)}${r.ml ? `（${r.ml}ml）` : ""}</div>
-      </td>
-      <td class="num">${r.perml ? r.perml.toFixed(2) + "円" : "—"}</td>
-      <td>${r.additive ? `<span class="tag good">無添加表記あり</span>` : `<span class="tag warn">未検出</span>`}</td>
-      <td>${r.origin || `<span class="note" style="margin:0">不明</span>`}</td>
-      <td class="num">${r.rating ? `★${r.rating} <span class="note" style="margin:0">(${r.reviews}件)</span>` : "データなし"}</td>
-      <td class="num score">${(r.score * 100).toFixed(0)}</td>
+function renderCards(rows){
+  resultCountEl.textContent = `${rows.length}件`;
+  cardsEl.innerHTML = rows.map(r => {
+    const qtyValue = r.qty ? `${r.qty.value.toLocaleString("ja-JP")}${r.qty.unit}` : "—";
+    const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "—";
+    const chips = currentAttrIds
+      .filter(id => id !== "cost")
+      .map(id => {
+        const hit = r.attrHits[id];
+        return `<span class="tag ${hit ? "good" : "warn"}">${ATTRS[id].label.replace(/を重視する$/, "")}${hit ? "" : "：未検出"}</span>`;
+      }).join("");
+
+    return `
+    <div class="product-card">
+      <div class="pcard-top">
+        <div>
+          <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener">${r.name}</a></div>
+          <div class="pcard-shop">${r.shop}</div>
+        </div>
+        <div class="pcard-score">
+          <span class="num">${(r.score * 100).toFixed(0)}</span>
+          <span class="lbl">総合スコア</span>
+        </div>
+      </div>
+
+      <div class="pcard-grid">
+        <div class="field">
+          <div class="flabel">容量</div>
+          <div class="fvalue ${r.qty ? "" : "muted"}">${qtyValue}</div>
+        </div>
+        <div class="field">
+          <div class="flabel">容器</div>
+          <div class="fvalue ${r.packaging ? "" : "muted"}">${r.packaging || "—"}</div>
+        </div>
+        <div class="field">
+          <div class="flabel">値段</div>
+          <div class="fvalue">${fmtYen(r.price)}</div>
+          <div class="fsub">${perUnitValue}</div>
+        </div>
+        <div class="field">
+          <div class="flabel">口コミ</div>
+          <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
+          <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
+        </div>
+      </div>
+
+      <div class="ingredients"><b>原材料：</b>${r.ingredients || "記載を検出できませんでした"}</div>
+
+      <div class="chips">${chips}</div>
+    </div>
     `;
-    tbody.appendChild(tr);
-  });
+  }).join("");
 }
 
-document.querySelectorAll("#tbl th").forEach(th => {
-  th.addEventListener("click", () => {
-    const key = th.dataset.key;
-    const rows = [...currentRows].sort((a,b) => {
-      if(key === "name") return a.name.localeCompare(b.name, "ja");
-      if(key === "additive") return (b.additive?1:0) - (a.additive?1:0);
-      if(key === "origin") return (a.origin||"").localeCompare(b.origin||"", "ja");
-      if(key === "rating") return (b.rating||0) - (a.rating||0);
-      if(key === "perml") return (a.perml ?? Infinity) - (b.perml ?? Infinity);
-      return (b.score||0) - (a.score||0);
-    });
-    renderRows(rows);
+function sortAndRender(){
+  const key = sortSelect.value;
+  const rows = [...currentRows].sort((a,b) => {
+    if(key === "name") return a.name.localeCompare(b.name, "ja");
+    if(key === "rating") return (b.rating||0) - (a.rating||0);
+    if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
+    return (b.score||0) - (a.score||0);
   });
-});
+  renderCards(rows);
+}
+sortSelect.addEventListener("change", sortAndRender);
 
 async function runSearch(){
   const keyword = document.getElementById("q").value.trim();
   if(!keyword){ return; }
+  renderPrefPanel(keyword);
   goBtn.disabled = true;
   statusEl.className = "status";
   statusEl.textContent = "検索中…";
@@ -260,6 +391,9 @@ async function runSearch(){
     goBtn.disabled = false;
   }
 }
+
+// 初期表示
+renderPrefPanel(document.getElementById("q").value.trim());
 
 goBtn.addEventListener("click", runSearch);
 document.getElementById("q").addEventListener("keydown", e => { if(e.key === "Enter") runSearch(); });
