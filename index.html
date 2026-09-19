@@ -62,7 +62,14 @@
     background:var(--card); border:1px solid var(--line); border-radius:14px;
     padding:14px 16px;
   }
-  .pcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+  .pcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+  .pcard-main{display:flex; gap:12px; align-items:flex-start; flex:1; min-width:0;}
+  .pcard-thumb{
+    flex-shrink:0; width:72px; height:72px; border-radius:10px; overflow:hidden;
+    background:var(--bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+  }
+  .pcard-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .pcard-thumb.empty{color:var(--sub); font-size:.7rem; text-align:center; padding:4px;}
   .pcard-name{font-weight:700; font-size:1rem; line-height:1.4;}
   .pcard-name a{color:var(--ink); text-decoration:none;}
   .pcard-name a:hover{text-decoration:underline;}
@@ -229,6 +236,20 @@ function detectIngredients(text){
   const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
   return m ? m[1].trim() : "";
 }
+// 楽天APIのレスポンスから商品画像URLを取り出す（バージョンによって形が微妙に違うため、いくつかの形に対応する）
+function getImageUrl(item){
+  const candidates = [item.mediumImageUrls, item.smallImageUrls];
+  for(const arr of candidates){
+    if(Array.isArray(arr) && arr.length > 0){
+      const first = arr[0];
+      const url = typeof first === "string" ? first : (first && first.imageUrl);
+      if(url) return url.replace(/^http:\/\//, "https://");
+    }
+  }
+  if(typeof item.imageUrl === "string" && item.imageUrl) return item.imageUrl.replace(/^http:\/\//, "https://");
+  return "";
+}
+
 // AIが使えないときの簡易な商品名圧縮（先頭の「本体名」らしき部分だけ残す）
 function compactName(name){
   if(!name) return "";
@@ -309,6 +330,7 @@ function buildRows(items, attrDefs, aiItemsByIndex){
     rows.push({
       name: item.itemName,
       displayName, summary,
+      image: getImageUrl(item),
       url: item.itemUrl,
       shop: item.shopName,
       price: item.itemPrice,
@@ -363,12 +385,19 @@ function renderCards(rows, excludedCount){
         return `<span class="tag ${hit ? "good" : "warn"}">${shortLabel}${hit ? "" : "：未検出"}</span>`;
       }).join("");
 
+    const thumb = r.image
+      ? `<a class="pcard-thumb" href="${r.url}" target="_blank" rel="noopener"><img src="${r.image}" alt="" loading="lazy" onerror="this.closest('.pcard-thumb').outerHTML='&lt;div class=&quot;pcard-thumb empty&quot;&gt;画像なし&lt;/div&gt;'"></a>`
+      : `<div class="pcard-thumb empty">画像なし</div>`;
+
     return `
     <div class="product-card">
       <div class="pcard-top">
-        <div>
-          <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
-          <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
+        <div class="pcard-main">
+          ${thumb}
+          <div>
+            <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
+            <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
+          </div>
         </div>
         <div class="pcard-score">
           <span class="num">${(r.score * 100).toFixed(0)}</span>
