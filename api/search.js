@@ -1,3 +1,9 @@
+// これは「中継サーバー」担当のファイルです。
+// ブラウザは楽天に直接話しかけず、このファイル(自分のサーバー)に話しかけます。
+//
+// 補足: 最初は fetch() を使っていましたが、fetch() は「Referer」ヘッダーを
+// プログラム側から指定しても黙って無視してしまう仕様のため、
+// もっと低レベルな https モジュールを使って確実にヘッダーを送るようにしています。
 import https from "node:https";
 
 const RAKUTEN_APP_ID = "0151ff90-e03b-4d28-981a-dac33539f3d1";
@@ -46,7 +52,10 @@ export default async function handler(req, res) {
     accessKey: RAKUTEN_ACCESS_KEY,
     keyword,
     hits,
-    sort: "+itemPrice",
+    // 安い順(+itemPrice)だと、キーワードが偶然含まれているだけの激安な無関係商品
+    // （見積もりページや付属品など）が上位を占めてしまうため、楽天の標準の関連性順にする。
+    // 価格順に並べたい場合は、取得したあとアプリ側の「並び替え」でユーザーが選べるようにしている。
+    sort: "standard",
     format: "json",
   });
 
