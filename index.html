@@ -148,7 +148,7 @@
   </div>
 
   <p class="note">
-    好みプロフィールの項目、商品の関連性判定（無関係な商品の除外）、原材料・容器・容量の抽出は、AIによる自動判定です。AIが利用できない場合は商品名・説明文の簡易的なキーワード検出に切り替わります（この場合、関連性の低い商品は除外されません）。いずれの方法でも完全な精度は保証されないため、参考情報としてご利用ください。空欄・「—」は「読み取れなかった」という意味で、該当しないという意味ではありません。
+    好みプロフィールの項目、商品の関連性判定（無関係な商品の除外）、比較用のスペック項目（容量・原材料や接続方式など、ジャンルに応じてAIが選びます）の抽出は、AIによる自動判定です。AIが利用できない場合は商品名・説明文の簡易的なキーワード検出に切り替わります（この場合、関連性の低い商品は除外されません）。いずれの方法でも完全な精度は保証されないため、参考情報としてご利用ください。空欄・「—」は「読み取れなかった」という意味で、該当しないという意味ではありません。
   </p>
 </div>
 
@@ -165,6 +165,7 @@ const sortSelect = document.getElementById("sortSelect");
 
 let currentRows = [];
 let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
+let currentSpecFields = []; // [{id, label}] ジャンルに応じた客観スペック項目（AIが生成、または簡易フォールバック）
 
 // ===== 自分のサーバー（中継API）への問い合わせ =====
 async function apiRequest(params){
@@ -189,7 +190,7 @@ async function analyzeWithAI(keyword, itemsForAI){
     const detail = data?.raw ? ` / ${data.raw.slice(0, 200)}` : "";
     throw new Error(`${data?.error || "error"} (HTTP ${data?.status || r.status})${detail}`);
   }
-  return data; // { attributes: [{id,label}], items: [{index, relevant, attrHits, ingredients, packaging, quantityValue, quantityUnit}] }
+  return data; // { attributes: [{id,label}], specFields: [{id,label}], items: [{index, relevant, attrHits, specs:[{id,value}], quantityValue, quantityUnit}] }
 }
 
 // ===== AIが使えないときの簡易フォールバック（キーワード検出） =====
@@ -218,6 +219,13 @@ const FALLBACK_GENRE_MAP = [
   { match: ["醤油", "味噌", "みそ", "塩", "砂糖", "調味料"], attrs: ["additive", "domestic"] },
 ];
 const FALLBACK_DEFAULT_ATTRS = ["additive", "domestic"];
+
+// AIが使えないときの簡易フォールバック用のスペック項目（食品向けの3項目に固定）
+const FALLBACK_SPEC_FIELDS = [
+  { id: "qty", label: "容量" },
+  { id: "packaging", label: "容器" },
+  { id: "ingredients", label: "原材料" },
+];
 
 function fallbackAttrDefs(keyword){
   const hit = FALLBACK_GENRE_MAP.find(g => g.match.some(m => keyword.includes(m)));
@@ -303,7 +311,8 @@ function renderPrefPanel(attrDefs){
 }
 
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
-function buildRows(items, attrDefs, aiItemsByIndex, ignoreRelevance){
+// specFieldDefs: [{id,label}] ジャンルに応じた客観スペック項目（AIが生成、またはFALLBACK_SPEC_FIELDS）
+function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
   const rows = [];
   let excluded = 0;
 
@@ -317,22 +326,28 @@ function buildRows(items, attrDefs, aiItemsByIndex, ignoreRelevance){
       return;
     }
 
-    let qty = null, packaging = "", ingredients = "", displayName = "", summary = "";
+    let qty = null, displayName = "", summary = "";
+    const specValues = {};
     const attrHits = {};
 
     if(ai){
       qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
-      packaging = ai.packaging || detectPackaging(text);
-      ingredients = ai.ingredients || detectIngredients(text);
       displayName = ai.shortName || compactName(item.itemName);
       summary = ai.summary || "";
+      const specMap = new Map((ai.specs || []).map(s => [s.id, s.value]));
+      specFieldDefs.forEach(f => { specValues[f.id] = specMap.get(f.id) || ""; });
       const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
       attrDefs.forEach(a => { if(a.id !== "cost") attrHits[a.id] = hitMap.get(a.id) || false; });
     }else{
       qty = detectQuantity(text);
-      packaging = detectPackaging(text);
-      ingredients = detectIngredients(text);
       displayName = compactName(item.itemName);
+      // フォールバック時はFALLBACK_SPEC_FIELDSのidに合わせて簡易抽出する
+      specFieldDefs.forEach(f => {
+        if(f.id === "qty") specValues.qty = qty ? `${qty.value}${qty.unit}` : "";
+        else if(f.id === "packaging") specValues.packaging = detectPackaging(text);
+        else if(f.id === "ingredients") specValues.ingredients = detectIngredients(text);
+        else specValues[f.id] = "";
+      });
       attrDefs.forEach(a => {
         if(a.id === "cost") return;
         const words = (FALLBACK_ATTRS[a.id] && FALLBACK_ATTRS[a.id].words) || [];
@@ -350,7 +365,7 @@ function buildRows(items, attrDefs, aiItemsByIndex, ignoreRelevance){
       shop: item.shopName,
       price: item.itemPrice,
       qty, perUnit,
-      packaging, ingredients, attrHits,
+      specValues, attrHits,
       rating: item.reviewAverage || null,
       reviews: item.reviewCount || 0,
     });
@@ -362,11 +377,13 @@ function buildRows(items, attrDefs, aiItemsByIndex, ignoreRelevance){
 // 同じ商品が別の店舗から重複して出てくることがあるため、まとめる。
 // 画像URLは店舗ごとに違う写真を使っていることが多く一致しないので、
 // 「商品名（要約後）＋価格＋容量」が一致するものを同一商品とみなす。
-// まとめる際は、片方に欠けている情報（原材料・容器・画像など）をもう片方から補う。
+// まとめる際は、片方に欠けている情報（スペック項目・画像など）をもう片方から補う。
 function mergeRowInfo(base, other){
   const merged = { ...base };
-  if(!merged.ingredients && other.ingredients) merged.ingredients = other.ingredients;
-  if(!merged.packaging && other.packaging) merged.packaging = other.packaging;
+  merged.specValues = { ...(other.specValues || {}), ...(base.specValues || {}) };
+  Object.keys(other.specValues || {}).forEach(k => {
+    if(!merged.specValues[k] && other.specValues[k]) merged.specValues[k] = other.specValues[k];
+  });
   if(!merged.summary && other.summary) merged.summary = other.summary;
   if(!merged.qty && other.qty) merged.qty = other.qty;
   if(!merged.perUnit && other.perUnit) merged.perUnit = other.perUnit;
@@ -443,8 +460,15 @@ function renderCards(rows, excludedInfo){
     : `${rows.length}件`;
 
   cardsEl.innerHTML = rows.map(r => {
-    const qtyValue = r.qty ? `${r.qty.value.toLocaleString("ja-JP")}${r.qty.unit}` : "—";
     const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "—";
+    const specFieldsHtml = currentSpecFields.map(f => {
+      const val = (r.specValues || {})[f.id] || "";
+      return `
+          <div class="field">
+            <div class="flabel">${f.label}</div>
+            <div class="fvalue ${val ? "" : "muted"}">${val || "—"}</div>
+          </div>`;
+    }).join("");
     const chips = currentAttrDefs
       .filter(a => a.id !== "cost")
       .map(a => {
@@ -475,14 +499,6 @@ function renderCards(rows, excludedInfo){
 
         <div class="pcard-grid">
           <div class="field">
-            <div class="flabel">容量</div>
-            <div class="fvalue ${r.qty ? "" : "muted"}">${qtyValue}</div>
-          </div>
-          <div class="field">
-            <div class="flabel">容器</div>
-            <div class="fvalue ${r.packaging ? "" : "muted"}">${r.packaging || "—"}</div>
-          </div>
-          <div class="field">
             <div class="flabel">値段</div>
             <div class="fvalue">${fmtYen(r.price)}</div>
             <div class="fsub">${perUnitValue}</div>
@@ -491,10 +507,8 @@ function renderCards(rows, excludedInfo){
             <div class="flabel">口コミ</div>
             <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
             <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
-          </div>
+          </div>${specFieldsHtml}
         </div>
-
-        <div class="ingredients"><b>原材料：</b>${r.ingredients || "記載を検出できませんでした"}</div>
 
         <div class="chips">${chips}</div>
       </div>
@@ -544,7 +558,7 @@ async function runSearch(){
 
     statusEl.textContent = "AIでジャンルを分析中…";
 
-    let attrDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
+    let attrDefs, specFieldDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
     try{
       const ai = await analyzeWithAI(keyword, itemsForAI);
       const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost").slice(0, 4);
@@ -552,6 +566,8 @@ async function runSearch(){
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
         ...aiAttrs.map((a, i) => ({ id: a.id, label: a.label, defaultChecked: i === 0 })),
       ];
+      const aiSpecFields = (ai.specFields || []).filter(f => f.id && f.label).slice(0, 3);
+      specFieldDefs = aiSpecFields.length ? aiSpecFields : FALLBACK_SPEC_FIELDS;
       aiItemsByIndex = new Map((ai.items || []).map(r => [r.index, r]));
     }catch(e){
       aiFailed = true;
@@ -560,18 +576,20 @@ async function runSearch(){
         { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
         ...fallbackAttrDefs(keyword),
       ];
+      specFieldDefs = FALLBACK_SPEC_FIELDS;
       aiItemsByIndex = null;
     }
 
+    currentSpecFields = specFieldDefs;
     renderPrefPanel(attrDefs);
 
     let relevanceIgnored = false;
-    let built = buildRows(items, attrDefs, aiItemsByIndex);
+    let built = buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex);
     // AIが全件（またはほぼ全件）を「無関係」と判定した場合は、判定ミスの可能性が高いとみなし、
     // 関連性フィルタだけ無効にして出し直す（0件のまま検索結果が消えてしまうのを防ぐ）
     if(aiItemsByIndex && items.length > 0 && built.rows.length === 0){
       relevanceIgnored = true;
-      built = buildRows(items, attrDefs, aiItemsByIndex, true);
+      built = buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, true);
     }
     const { rows: builtRows, excluded } = built;
     const { rows, duplicates } = dedupeRows(builtRows);
