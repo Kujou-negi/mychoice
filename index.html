@@ -112,41 +112,23 @@
 <script>
 // ▼ このページを github.io で公開して開いたときだけ、楽天側のリファラーチェックを通過します。
 //   ローカルでダブルクリックして開いただけでは実データは取得できません（HTTP_REFERRER_MISSING 等のエラーになります）。
-const RAKUTEN_APP_ID = "0151ff90-e03b-4d28-981a-dac33539f3d1";
-const RAKUTEN_ACCESS_KEY = "pk_2WchspGfdU1i9gJVaf7W32Vl9z69xBQyXvw8FPTpwAX";
-const ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701";
-
 const statusEl = document.getElementById("status");
 const resultPanel = document.getElementById("resultPanel");
 const tbody = document.querySelector("#tbl tbody");
 const goBtn = document.getElementById("go");
 
 let currentRows = [];
-let jsonpCounter = 0;
 
-function jsonpRequest(params, timeoutMs = 12000){
-  return new Promise((resolve, reject) => {
-    const cbName = "mychoiceCb_" + (jsonpCounter++);
-    const script = document.createElement("script");
-    script.referrerPolicy = "unsafe-url"; // ブラウザのトラッキング防止機能でリファラーが消えるのを防ぐ
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("タイムアウトしました（リファラー制限などで拒否された可能性があります）"));
-    }, timeoutMs);
-
-    function cleanup(){
-      clearTimeout(timer);
-      delete window[cbName];
-      if(script.parentNode) script.parentNode.removeChild(script);
-    }
-
-    window[cbName] = (data) => { cleanup(); resolve(data); };
-    script.onerror = () => { cleanup(); reject(new Error("APIへの接続に失敗しました")); };
-
-    const qs = new URLSearchParams({ ...params, format: "jsonp", callback: cbName });
-    script.src = `${ENDPOINT}?${qs.toString()}`;
-    document.head.appendChild(script);
-  });
+// 楽天に直接ではなく、自分のサーバー(/api/search)に問い合わせる
+async function apiRequest(params){
+  const qs = new URLSearchParams(params);
+  const r = await fetch(`/api/search?${qs.toString()}`);
+  const data = await r.json();
+  if(!r.ok){
+    const msg = data?.errors?.errorMessage || data?.error || `HTTP ${r.status}`;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 // ざっくりキーワード検出（本格版ではここをAIによる抽出に置き換える想定）
@@ -263,16 +245,7 @@ async function runSearch(){
   statusEl.textContent = "検索中…";
   resultPanel.style.display = "none";
   try{
-    const data = await jsonpRequest({
-      applicationId: RAKUTEN_APP_ID,
-      accessKey: RAKUTEN_ACCESS_KEY,
-      keyword,
-      hits: 20,
-      sort: "+itemPrice",
-    });
-    if(data.error){
-      throw new Error(`${data.error}: ${data.error_description || ""}`);
-    }
+    const data = await apiRequest({ keyword, hits: 20 });
     const items = data.Items || [];
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
@@ -282,7 +255,7 @@ async function runSearch(){
     statusEl.textContent = `${items.length}件取得しました。`;
   }catch(e){
     statusEl.className = "status err";
-    statusEl.textContent = "エラー: " + e.message + "（このページを実際にgithub.io上で開いているか、楽天アプリの「許可されたWebサイト」設定を確認してください）";
+    statusEl.textContent = "エラー: " + e.message;
   }finally{
     goBtn.disabled = false;
   }
