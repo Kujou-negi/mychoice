@@ -143,16 +143,65 @@
   .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
   .exclude-list .filter-item input{accent-color:var(--price);}
 
-  .skeleton-list{display:flex; flex-direction:column; gap:14px; margin-top:12px;}
-  .skeleton-row{
-    height:104px; border-radius:4px;
-    background:linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%);
-    background-size:200% 100%;
-    animation:skeleton-shimmer 1.4s ease-in-out infinite;
+  /* ===== 検索中のアニメーション：黄色い丸い生き物が宝箱を開ける ===== */
+  .loading-scene{
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:38px 0 30px;
   }
-  @keyframes skeleton-shimmer{
-    0%{background-position:200% 0;}
-    100%{background-position:-200% 0;}
+  .chest-wrap{position:relative; width:100px; height:70px; perspective:300px;}
+  .chest-body{
+    position:absolute; bottom:0; left:0; width:100px; height:44px;
+    background:#8a5a2b; border:3px solid #5c3a1a; border-radius:0 0 10px 10px; box-sizing:border-box;
+  }
+  .chest-body::after{
+    content:""; position:absolute; left:44px; top:-2px; width:12px; height:14px;
+    background:#f2c14e; border:2px solid #5c3a1a; border-radius:3px; box-sizing:border-box;
+  }
+  .chest-lid{
+    position:absolute; top:0; left:0; width:100px; height:26px;
+    background:#a5702f; border:3px solid #5c3a1a; border-radius:12px 12px 3px 3px; box-sizing:border-box;
+    transform-origin:bottom center; transform:rotateX(0deg);
+    animation:chest-wiggle 1.2s ease-in-out infinite;
+  }
+  @keyframes chest-wiggle{
+    0%,100%{ transform:rotateX(0deg); }
+    50%{ transform:rotateX(-10deg); }
+  }
+  .mochi{
+    position:relative; width:52px; height:52px; border-radius:50%;
+    background:#ffd23f; border:3px solid #e0a800; box-sizing:border-box;
+    animation:mochi-bounce 1.2s ease-in-out infinite;
+  }
+  @keyframes mochi-bounce{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-9px); }
+  }
+  .mochi-eye{ position:absolute; top:19px; width:6px; height:8px; background:#4a3300; border-radius:50%; }
+  .mochi-eye.left{ left:13px; } .mochi-eye.right{ right:13px; }
+  .mochi-mouth{
+    position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+    width:14px; height:7px; border-bottom:3px solid #4a3300; border-radius:0 0 10px 10px;
+  }
+  .sparkles{ position:absolute; inset:-10px; pointer-events:none; }
+  .sparkles span{
+    position:absolute; top:36%; left:50%; width:6px; height:6px;
+    background:#ffe066; border-radius:50%; opacity:0;
+  }
+  .sparkles span:nth-child(1){ --tx:-38px; --ty:-34px; }
+  .sparkles span:nth-child(2){ --tx:0px;   --ty:-46px; }
+  .sparkles span:nth-child(3){ --tx:38px;  --ty:-34px; }
+  .sparkles span:nth-child(4){ --tx:-22px; --ty:-16px; }
+  .sparkles span:nth-child(5){ --tx:22px;  --ty:-16px; }
+  .loading-caption{font-size:.78rem; color:var(--text-sub); margin:0;}
+
+  .loading-scene.opening .chest-lid{
+    animation:none; transform:rotateX(-120deg); transition:transform .45s ease-out;
+  }
+  .loading-scene.opening .mochi{ animation:none; transform:translateY(-9px) scale(1.06); }
+  .loading-scene.opening .sparkles span{ animation:sparkle-burst .55s ease-out forwards; }
+  @keyframes sparkle-burst{
+    0%{ opacity:1; transform:scale(.2) translate(0, 0); }
+    100%{ opacity:0; transform:scale(1) translate(var(--tx), var(--ty)); }
   }
 </style>
 </head>
@@ -177,11 +226,18 @@
   <main class="main">
     <p class="status" id="status"></p>
     <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
-    <div class="skeleton-list" id="skeletonList" style="display:none;">
-      <div class="skeleton-row"></div>
-      <div class="skeleton-row"></div>
-      <div class="skeleton-row"></div>
-      <div class="skeleton-row"></div>
+    <div class="loading-scene" id="loadingScene" style="display:none;">
+      <div class="chest-wrap">
+        <div class="chest-lid"></div>
+        <div class="chest-body"></div>
+        <div class="sparkles"><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="mochi">
+        <div class="mochi-eye left"></div>
+        <div class="mochi-eye right"></div>
+        <div class="mochi-mouth"></div>
+      </div>
+      <p class="loading-caption">お宝を探しています…</p>
     </div>
 
     <div id="resultPanel" style="display:none;">
@@ -212,7 +268,7 @@ const excludeContainer = document.getElementById("excludeContainer");
 const sortSelect = document.getElementById("sortSelect");
 const progressWrap = document.getElementById("progressWrap");
 const progressBar = document.getElementById("progressBar");
-const skeletonList = document.getElementById("skeletonList");
+const loadingScene = document.getElementById("loadingScene");
 
 let currentRows = [];
 let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
@@ -240,6 +296,22 @@ function finishProgress(){
     progressWrap.style.display = "none";
     progressBar.style.width = "0%";
   }, 350);
+}
+
+// 検索中は宝箱の前で待機する黄色い生き物を表示し、結果が揃った瞬間に宝箱を開けてから結果を見せる
+function startLoadingScene(){
+  loadingScene.classList.remove("opening");
+  loadingScene.style.display = "flex";
+}
+function hideLoadingScene(){
+  loadingScene.classList.remove("opening");
+  loadingScene.style.display = "none";
+}
+function playChestOpen(){
+  return new Promise(resolve => {
+    loadingScene.classList.add("opening");
+    setTimeout(resolve, 550);
+  });
 }
 
 // ===== 自分のサーバー（中継API）への問い合わせ =====
@@ -396,6 +468,7 @@ function compactName(name){
 }
 
 function detectQuantity(text){
+  if(!text) return null;
   let m = text.match(/(\d+(?:\.\d+)?)\s*m ?l/i);
   if(m) return { value: Number(m[1]), unit: "ml" };
   m = text.match(/(\d+(?:\.\d+)?)\s*[lL](?![a-zA-Z])/);
@@ -404,6 +477,17 @@ function detectQuantity(text){
   if(m) return { value: Number(m[1]) * 1000, unit: "g" };
   m = text.match(/(\d+(?:\.\d+)?)\s*g(?![a-zA-Z])/i);
   if(m) return { value: Number(m[1]), unit: "g" };
+  // 重量・体積の記載が無い商品（海苔の枚数など）は、個数単位でも単価比較できるようにする
+  m = text.match(/(\d+(?:\.\d+)?)\s*枚/);
+  if(m) return { value: Number(m[1]), unit: "枚" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*個/);
+  if(m) return { value: Number(m[1]), unit: "個" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*本/);
+  if(m) return { value: Number(m[1]), unit: "本" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*袋/);
+  if(m) return { value: Number(m[1]), unit: "袋" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*玉/);
+  if(m) return { value: Number(m[1]), unit: "玉" };
   return null;
 }
 
@@ -465,13 +549,16 @@ function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, igno
     const attrHits = {};
 
     if(ai){
-      qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
       displayName = ai.shortName || compactName(item.itemName);
       origin = isFood ? (ai.origin || detectOrigin(text)) : "";
       maker = ai.maker || "";
       feature = ai.feature || "";
       const specMap = new Map((ai.specs || []).map(s => [s.id, s.value]));
       specFieldDefs.forEach(f => { specValues[f.id] = specMap.get(f.id) || ""; });
+      // 単価計算は、画面にそのまま表示する「容量」欄のテキストから直接抽出する。
+      // AIが単価計算専用に別枠で返す数値を使うと、表示は「50枚」なのに単価だけ謎のg換算になる、
+      // といった表示と計算の食い違いが起きるため、常に同じ数値から両方を出す。
+      qty = detectQuantity(specValues.qty) || detectQuantity(text);
       const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
       attrDefs.forEach(a => { if(a.id !== "cost") attrHits[a.id] = hitMap.get(a.id) || false; });
     }else{
@@ -680,7 +767,7 @@ async function runSearch(){
   resultPanel.style.display = "none";
   prefsContainer.innerHTML = `<p class="empty-note">分析中…</p>`;
   excludeContainer.innerHTML = "";
-  skeletonList.style.display = "flex";
+  startLoadingScene();
   startProgress();
 
   try{
@@ -689,7 +776,7 @@ async function runSearch(){
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
       prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
-      skeletonList.style.display = "none";
+      hideLoadingScene();
       return;
     }
 
@@ -748,7 +835,9 @@ async function runSearch(){
     renderExcludePanel(rows);
     sortAndRender.excludedInfo = { relevance: relevanceIgnored ? 0 : excluded, duplicates };
     sortAndRender();
-    skeletonList.style.display = "none";
+    // 結果が揃った瞬間に宝箱を開けてから結果一覧を見せる
+    await playChestOpen();
+    hideLoadingScene();
     resultPanel.style.display = "block";
 
     statusEl.textContent = aiFailed
@@ -760,7 +849,7 @@ async function runSearch(){
     statusEl.className = "status err";
     statusEl.textContent = "エラー: " + e.message;
     prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
-    skeletonList.style.display = "none";
+    hideLoadingScene();
   }finally{
     goBtn.disabled = false;
     finishProgress();
