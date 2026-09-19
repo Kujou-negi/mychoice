@@ -79,14 +79,10 @@
   .pcard-thumb.empty{color:var(--sub); font-size:.75rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;}
 
   .pcard-body{min-width:0; display:flex; flex-direction:column;}
-  .pcard-body-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
-  .pcard-shop{color:var(--sub); font-size:.8rem; margin-top:2px;}
-  .pcard-score{
-    flex-shrink:0; text-align:center; background:var(--bg); border:1px solid var(--line);
-    border-radius:10px; padding:6px 12px; min-width:64px;
-  }
-  .pcard-score .num{font-weight:700; font-size:1.1rem; color:var(--accent-ink); display:block;}
-  .pcard-score .lbl{font-size:.7rem; color:var(--sub);}
+  .pcard-body-top{display:flex; flex-direction:column; gap:2px;}
+  .pcard-origin{font-size:1.15rem; font-weight:700; color:var(--accent-ink); line-height:1.3;}
+  .pcard-maker{font-size:.85rem; color:var(--ink); font-weight:600;}
+  .pcard-feature{font-size:.8rem; color:var(--sub); line-height:1.5; margin-top:2px;}
 
   .pcard-grid{
     display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr));
@@ -95,10 +91,8 @@
   .field .flabel{font-size:.72rem; color:var(--sub); margin-bottom:2px;}
   .field .fvalue{font-size:.88rem; font-weight:600;}
   .field .fvalue.muted{font-weight:400; color:var(--sub);}
+  .field .fvalue.ship-free{color:var(--good);}
   .field .fsub{font-size:.75rem; color:var(--sub); font-weight:400; margin-top:1px;}
-
-  .ingredients{font-size:.8rem; color:var(--sub); margin-top:8px; line-height:1.6;}
-  .ingredients b{color:var(--ink); font-weight:600;}
 
   .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;}
   .tag{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75em; font-weight:600;}
@@ -137,7 +131,7 @@
       <label style="font-size:.85rem; color:var(--sub); display:flex; align-items:center; gap:6px;">
         並び替え:
         <select id="sortSelect">
-          <option value="score">総合スコア順</option>
+          <option value="score">おすすめ順</option>
           <option value="perunit">単価が安い順</option>
           <option value="rating">口コミ評価順</option>
           <option value="name">商品名順</option>
@@ -190,7 +184,7 @@ async function analyzeWithAI(keyword, itemsForAI){
     const detail = data?.raw ? ` / ${data.raw.slice(0, 200)}` : "";
     throw new Error(`${data?.error || "error"} (HTTP ${data?.status || r.status})${detail}`);
   }
-  return data; // { attributes: [{id,label}], specFields: [{id,label}], items: [{index, relevant, attrHits, specs:[{id,value}], quantityValue, quantityUnit}] }
+  return data; // { attributes: [{id,label}], specFields: [{id,label}], items: [{index, relevant, attrHits, specs:[{id,value}], origin, maker, feature, quantityValue, quantityUnit}] }
 }
 
 // ===== AIが使えないときの簡易フォールバック（キーワード検出） =====
@@ -250,6 +244,25 @@ function detectPackaging(text){
 function detectIngredients(text){
   const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
   return m ? m[1].trim() : "";
+}
+// AIが使えないときの簡易な産地（都道府県）検出。本文中に都道府県名が含まれていれば、それを産地とみなす。
+const PREFECTURES = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県",
+  "三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県",
+];
+function detectOrigin(text){
+  return PREFECTURES.find(p => text.includes(p)) || "";
+}
+// 楽天APIのpostageFlag（0:送料込み/送料無料表示、1:送料別）から送料表示を作る
+function detectShipping(item){
+  if(item.postageFlag === 0) return { free: true, label: "送料無料" };
+  if(item.postageFlag === 1) return { free: false, label: "送料別" };
+  return null;
 }
 // 楽天の画像URLは "?_ex=128x128" のようなパラメータでサイズが小さく指定されていることが多いので、
 // 表示に使うため大きいサイズを要求し直す（画質自体はサーバー側の元画像次第だが、縮小し過ぎた画像よりは綺麗になる）
@@ -326,14 +339,16 @@ function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevan
       return;
     }
 
-    let qty = null, displayName = "", summary = "";
+    let qty = null, displayName = "", origin = "", maker = "", feature = "";
     const specValues = {};
     const attrHits = {};
 
     if(ai){
       qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
       displayName = ai.shortName || compactName(item.itemName);
-      summary = ai.summary || "";
+      origin = ai.origin || detectOrigin(text);
+      maker = ai.maker || "";
+      feature = ai.feature || "";
       const specMap = new Map((ai.specs || []).map(s => [s.id, s.value]));
       specFieldDefs.forEach(f => { specValues[f.id] = specMap.get(f.id) || ""; });
       const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
@@ -341,6 +356,7 @@ function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevan
     }else{
       qty = detectQuantity(text);
       displayName = compactName(item.itemName);
+      origin = detectOrigin(text);
       // フォールバック時はFALLBACK_SPEC_FIELDSのidに合わせて簡易抽出する
       specFieldDefs.forEach(f => {
         if(f.id === "qty") specValues.qty = qty ? `${qty.value}${qty.unit}` : "";
@@ -359,11 +375,12 @@ function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevan
 
     rows.push({
       name: item.itemName,
-      displayName, summary,
+      displayName, origin, maker, feature,
       image: getImageUrl(item),
       url: item.itemUrl,
       shop: item.shopName,
       price: item.itemPrice,
+      shipping: detectShipping(item),
       qty, perUnit,
       specValues, attrHits,
       rating: item.reviewAverage || null,
@@ -384,7 +401,10 @@ function mergeRowInfo(base, other){
   Object.keys(other.specValues || {}).forEach(k => {
     if(!merged.specValues[k] && other.specValues[k]) merged.specValues[k] = other.specValues[k];
   });
-  if(!merged.summary && other.summary) merged.summary = other.summary;
+  if(!merged.origin && other.origin) merged.origin = other.origin;
+  if(!merged.maker && other.maker) merged.maker = other.maker;
+  if(!merged.feature && other.feature) merged.feature = other.feature;
+  if(!merged.shipping && other.shipping) merged.shipping = other.shipping;
   if(!merged.qty && other.qty) merged.qty = other.qty;
   if(!merged.perUnit && other.perUnit) merged.perUnit = other.perUnit;
   if(!merged.image && other.image) merged.image = other.image;
@@ -490,11 +510,9 @@ function renderCards(rows, excludedInfo){
 
       <div class="pcard-body">
         <div class="pcard-body-top">
-          <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
-          <div class="pcard-score">
-            <span class="num">${(r.score * 100).toFixed(0)}</span>
-            <span class="lbl">総合スコア</span>
-          </div>
+          ${r.origin ? `<div class="pcard-origin">${r.origin}</div>` : ""}
+          ${r.maker ? `<div class="pcard-maker">${r.maker}</div>` : ""}
+          ${r.feature ? `<div class="pcard-feature">${r.feature}</div>` : ""}
         </div>
 
         <div class="pcard-grid">
@@ -504,6 +522,10 @@ function renderCards(rows, excludedInfo){
             <div class="fsub">${perUnitValue}</div>
           </div>
           <div class="field">
+            <div class="flabel">送料</div>
+            <div class="fvalue ${r.shipping ? (r.shipping.free ? "ship-free" : "") : "muted"}">${r.shipping ? r.shipping.label : "—"}</div>
+          </div>
+          <div class="field">
             <div class="flabel">口コミ</div>
             <div class="fvalue ${r.rating ? "" : "muted"}">${r.rating ? `★${r.rating}` : "データなし"}</div>
             <div class="fsub">${r.reviews ? `${r.reviews}件` : ""}</div>
@@ -511,6 +533,8 @@ function renderCards(rows, excludedInfo){
         </div>
 
         <div class="chips">${chips}</div>
+
+        <div class="pcard-foot"><span>販売: ${r.shop}</span></div>
       </div>
     </div>
     `;
