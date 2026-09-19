@@ -303,7 +303,7 @@ function renderPrefPanel(attrDefs){
 }
 
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
-function buildRows(items, attrDefs, aiItemsByIndex){
+function buildRows(items, attrDefs, aiItemsByIndex, ignoreRelevance){
   const rows = [];
   let excluded = 0;
 
@@ -312,7 +312,7 @@ function buildRows(items, attrDefs, aiItemsByIndex){
     const text = `${item.itemName || ""} ${item.itemCaption || ""}`;
     const ai = aiItemsByIndex ? aiItemsByIndex.get(idx) : null;
 
-    if(ai && ai.relevant === false){
+    if(!ignoreRelevance && ai && ai.relevant === false){
       excluded++;
       return;
     }
@@ -565,16 +565,26 @@ async function runSearch(){
 
     renderPrefPanel(attrDefs);
 
-    const { rows: builtRows, excluded } = buildRows(items, attrDefs, aiItemsByIndex);
+    let relevanceIgnored = false;
+    let built = buildRows(items, attrDefs, aiItemsByIndex);
+    // AIが全件（またはほぼ全件）を「無関係」と判定した場合は、判定ミスの可能性が高いとみなし、
+    // 関連性フィルタだけ無効にして出し直す（0件のまま検索結果が消えてしまうのを防ぐ）
+    if(aiItemsByIndex && items.length > 0 && built.rows.length === 0){
+      relevanceIgnored = true;
+      built = buildRows(items, attrDefs, aiItemsByIndex, true);
+    }
+    const { rows: builtRows, excluded } = built;
     const { rows, duplicates } = dedupeRows(builtRows);
     computeScores(rows, attrDefs);
     currentRows = rows;
-    sortAndRender.excludedInfo = { relevance: excluded, duplicates };
+    sortAndRender.excludedInfo = { relevance: relevanceIgnored ? 0 : excluded, duplicates };
     sortAndRender();
     resultPanel.style.display = "block";
 
     statusEl.textContent = aiFailed
       ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています / 詳細: ${aiErrorMessage}）`
+      : relevanceIgnored
+      ? `${rows.length}件取得しました。（AIが全件を無関係と判定したため、関連性の判定は今回無効にしています）`
       : `${items.length}件取得しました。`;
   }catch(e){
     statusEl.className = "status err";
