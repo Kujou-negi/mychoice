@@ -617,12 +617,12 @@ function renderCards(rows, excludedInfo){
       })
       .filter(Boolean)
       .join("");
+    // 該当しない属性は「×」で否定的に見せず、そもそも表示しない（該当するものだけをタグのように示す）
     const attrsLine = currentAttrDefs
       .filter(a => a.id !== "cost")
-      .map(a => {
-        const hit = r.attrHits[a.id];
-        return `<span class="${hit ? "hit" : "miss"}">${hit ? "○" : "×"} ${a.label}</span>`;
-      }).join("");
+      .filter(a => r.attrHits[a.id])
+      .map(a => `<span class="hit">○ ${a.label}</span>`)
+      .join("");
 
     const metaBits = [];
     if(r.origin) metaBits.push(`<span class="origin">${r.origin}</span>`);
