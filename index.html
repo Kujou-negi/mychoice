@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>マイチョイス（プロトタイプ）</title>
+<title>マイチョイス</title>
 <style>
   :root{
     --bg:#faf7f2; --card:#ffffff; --ink:#2b2620; --sub:#6b6258;
@@ -21,15 +21,13 @@
     font-family:"Hiragino Sans","Yu Gothic",system-ui,-apple-system,sans-serif;
   }
   .wrap{max-width:960px; margin:0 auto;}
-  h1{font-size:1.3rem; margin:0 0 4px;}
-  .lede{color:var(--sub); font-size:.88rem; margin:0 0 18px; line-height:1.7;}
+  h1{font-size:1.2rem; margin:0 0 14px;}
 
   .panel{
     background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:16px 18px; margin-bottom:16px;
+    padding:14px 16px; margin-bottom:14px;
   }
-  .panel h2{font-size:.95rem; margin:0 0 10px; color:var(--accent-ink);}
-  .panel .sub{font-size:.78rem; color:var(--sub); margin:-6px 0 10px;}
+  .panel h2{font-size:.9rem; margin:0 0 8px; color:var(--accent-ink);}
   .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
   .search-row input[type=text]{
     flex:1; min-width:200px; padding:10px 12px; border-radius:10px;
@@ -63,67 +61,62 @@
     background:var(--card); color:var(--ink); font-size:.85rem;
   }
 
-  .cards{display:flex; flex-direction:column; gap:12px;}
+  .cards{display:flex; flex-direction:column; gap:10px;}
   .product-card{
-    background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:14px 16px;
-    display:grid; grid-template-columns:minmax(120px, 34%) 1fr; gap:14px;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:10px 12px;
+    display:grid; grid-template-columns:minmax(100px, 30%) 1fr; gap:10px;
   }
   @media (max-width:480px){
     .product-card{ grid-template-columns:1fr; }
   }
 
-  .pcard-media{display:flex; flex-direction:column; gap:8px; min-width:0;}
-  .pcard-name{font-weight:700; font-size:1rem; line-height:1.4;}
+  .pcard-media{display:flex; flex-direction:column; gap:6px; min-width:0;}
+  .pcard-name{font-weight:700; font-size:.88rem; line-height:1.35;}
   .pcard-name a{color:var(--ink); text-decoration:none;}
   .pcard-name a:hover{text-decoration:underline;}
   .pcard-thumb{
-    display:block; width:100%; aspect-ratio:1/1; border-radius:10px; overflow:hidden;
+    display:block; width:100%; aspect-ratio:1/1; border-radius:8px; overflow:hidden;
     background:var(--bg); border:1px solid var(--line);
   }
   .pcard-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
-  .pcard-thumb.empty{color:var(--sub); font-size:.75rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;}
+  .pcard-thumb.empty{color:var(--sub); font-size:.72rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;}
 
   .pcard-body{min-width:0; display:flex; flex-direction:column;}
-  .pcard-body-top{display:flex; flex-direction:column; gap:2px;}
-  .pcard-origin{font-size:1.15rem; font-weight:700; color:var(--accent-ink); line-height:1.3;}
-  .pcard-maker{font-size:.85rem; color:var(--ink); font-weight:600;}
-  .pcard-feature{font-size:.8rem; color:var(--sub); line-height:1.5; margin-top:2px;}
+  .pcard-body-top{display:flex; flex-direction:column; gap:1px;}
+  .pcard-origin{font-size:1rem; font-weight:700; color:var(--accent-ink); line-height:1.25;}
+  .pcard-maker{font-size:.78rem; color:var(--ink); font-weight:600;}
+  .pcard-feature{font-size:.75rem; color:var(--sub); line-height:1.4; margin-top:1px;}
 
   .pcard-grid{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr));
-    gap:10px 16px; margin:12px 0 4px; padding-top:10px; border-top:1px solid var(--line);
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(100px,1fr));
+    gap:6px 12px; margin:8px 0 2px; padding-top:8px; border-top:1px solid var(--line);
   }
-  .field .flabel{font-size:.72rem; color:var(--sub); margin-bottom:2px;}
-  .field .fvalue{font-size:.88rem; font-weight:600;}
+  .field .flabel{font-size:.68rem; color:var(--sub); margin-bottom:1px;}
+  .field .fvalue{font-size:.82rem; font-weight:600;}
   .field .fvalue.muted{font-weight:400; color:var(--sub);}
   .field .fvalue.ship-free{color:var(--good);}
-  .field .fsub{font-size:.75rem; color:var(--sub); font-weight:400; margin-top:1px;}
+  .field .fsub{font-size:.7rem; color:var(--sub); font-weight:400; margin-top:1px;}
 
-  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;}
-  .tag{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75em; font-weight:600;}
+  .chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:8px;}
+  .tag{display:inline-block; padding:1px 8px; border-radius:999px; font-size:.72em; font-weight:600;}
   .tag.good{background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good);}
   .tag.warn{background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn);}
   .tag.ai{background:color-mix(in srgb, var(--accent) 20%, transparent); color:var(--accent-ink);}
 
-  .pcard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:.8rem; color:var(--sub);}
-
-  .note{color:var(--sub); font-size:.85rem; margin-top:14px; line-height:1.7;}
+  .pcard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:.75rem; color:var(--sub);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>マイチョイス（プロトタイプ）</h1>
-  <p class="lede">好みプロフィールをもとに、楽天市場の実データから中立に一覧化します。ジャンルの判定・属性抽出はAI（Google Gemini）が行い、AIが使えない場合は簡易的なキーワード判定に自動で切り替わります。</p>
+  <h1>マイチョイス</h1>
 
   <div class="panel">
-    <h2>好みプロフィール</h2>
-    <p class="sub">検索キーワードに合わせて、下の項目はAIが自動的に生成します（「おすすめは？」を押すと更新されます）。</p>
+    <h2>絞り込み</h2>
     <div class="prefs" id="prefsContainer"><span class="prefs-empty">検索するとここに項目が表示されます。</span></div>
   </div>
 
   <div class="panel">
-    <h2>検索</h2>
     <div class="row search-row">
       <input type="text" id="q" value="梅シロップ" />
       <button id="go">おすすめは？</button>
@@ -147,10 +140,6 @@
     </div>
     <div class="cards" id="cards"></div>
   </div>
-
-  <p class="note">
-    好みプロフィールの項目、商品の関連性判定（無関係な商品の除外）、比較用のスペック項目（容量・原材料や接続方式など、ジャンルに応じてAIが選びます）の抽出は、AIによる自動判定です。AIが利用できない場合は商品名・説明文の簡易的なキーワード検出に切り替わります（この場合、関連性の低い商品は除外されません）。いずれの方法でも完全な精度は保証されないため、参考情報としてご利用ください。空欄・「—」は「読み取れなかった」という意味で、該当しないという意味ではありません。
-  </p>
 </div>
 
 <script>
@@ -245,6 +234,15 @@ const FALLBACK_GENRE_MAP = [
   { match: ["醤油", "味噌", "みそ", "塩", "砂糖", "調味料"], attrs: ["additive", "domestic"] },
 ];
 const FALLBACK_DEFAULT_ATTRS = ["additive", "domestic"];
+
+// 産地（都道府県）を表示するのは食品・飲料ジャンルのときだけにするための簡易判定
+const FOOD_KEYWORDS = FALLBACK_GENRE_MAP.flatMap(g => g.match).concat([
+  "食品", "食材", "フード", "お菓子", "菓子", "スイーツ", "飲料", "ドリンク", "飲み物",
+  "酒", "肉", "魚", "海鮮", "野菜", "果物", "フルーツ", "パン", "麺", "スープ", "調味料", "だし",
+]);
+function isFoodKeyword(keyword){
+  return FOOD_KEYWORDS.some(w => keyword.includes(w));
+}
 
 // AIが使えないときの簡易フォールバック用のスペック項目（食品向けの3項目に固定）
 const FALLBACK_SPEC_FIELDS = [
@@ -368,9 +366,10 @@ function onPrefChange(){
 
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
 // specFieldDefs: [{id,label}] ジャンルに応じた客観スペック項目（AIが生成、またはFALLBACK_SPEC_FIELDS）
-function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
+function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
   const rows = [];
   let excluded = 0;
+  const isFood = isFoodKeyword(keyword);
 
   items.forEach((it, idx) => {
     const item = it.Item || it; // APIバージョンによりItemでラップされる場合がある
@@ -389,7 +388,7 @@ function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevan
     if(ai){
       qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
       displayName = ai.shortName || compactName(item.itemName);
-      origin = ai.origin || detectOrigin(text);
+      origin = isFood ? (ai.origin || detectOrigin(text)) : "";
       maker = ai.maker || "";
       feature = ai.feature || "";
       const specMap = new Map((ai.specs || []).map(s => [s.id, s.value]));
@@ -399,7 +398,7 @@ function buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevan
     }else{
       qty = detectQuantity(text);
       displayName = compactName(item.itemName);
-      origin = detectOrigin(text);
+      origin = isFood ? detectOrigin(text) : "";
       // フォールバック時はFALLBACK_SPEC_FIELDSのidに合わせて簡易抽出する
       specFieldDefs.forEach(f => {
         if(f.id === "qty") specValues.qty = qty ? `${qty.value}${qty.unit}` : "";
@@ -652,12 +651,12 @@ async function runSearch(){
     renderPrefPanel(attrDefs);
 
     let relevanceIgnored = false;
-    let built = buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex);
+    let built = buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex);
     // AIが全件（またはほぼ全件）を「無関係」と判定した場合は、判定ミスの可能性が高いとみなし、
     // 関連性フィルタだけ無効にして出し直す（0件のまま検索結果が消えてしまうのを防ぐ）
     if(aiItemsByIndex && items.length > 0 && built.rows.length === 0){
       relevanceIgnored = true;
-      built = buildRows(items, attrDefs, specFieldDefs, aiItemsByIndex, true);
+      built = buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, true);
     }
     const { rows: builtRows, excluded } = built;
     const { rows, duplicates } = dedupeRows(builtRows);
