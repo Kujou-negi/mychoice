@@ -58,8 +58,6 @@ const RESPONSE_SCHEMA = {
               required: ["id", "value"],
             },
           },
-          quantityValue: { type: "NUMBER", description: "内容量・重量・体積を表す数値。Lはml換算、kgはg換算した値。単価計算に使うための補助情報で、genreに重量/体積の概念が無ければ0でよい" },
-          quantityUnit: { type: "STRING", description: "ml または g。無ければ空文字" },
           attrHits: {
             type: "ARRAY",
             items: {
@@ -103,7 +101,6 @@ ${itemsText}
 - feature: 商品の特徴を一言で（15文字程度）。origin・maker・specs・attrHitsのどれとも重複しない情報を書いてください（例:「無添加でじっくり手作り」）。無ければ空文字。
 - specs: 上記2のspecFieldsそれぞれについて、この商品での値を商品名・説明文から抽出し、idと短いvalue（例:「250ml」「有線」「メカニカル(茶軸)」「Mサイズ」）の組で返してください。読み取れなければvalueは空文字。食品の『原材料』にあたる項目では、食べられる成分だけをカンマ区切りで（瓶・容器・調理器具・手作りキットの道具類は絶対に含めない）。
 - attrHits: 上記1で挙げたattributesそれぞれについて、その商品がその観点に当てはまる記載があるか（true/false）
-- quantityValue, quantityUnit: 重さ(g/kg)または体積(ml/L)で表せる内容量がある場合のみ設定（Lはml×1000、kgはg×1000に換算）。単価計算にだけ使う補助情報なので、該当しないジャンルでは quantityValue を 0、quantityUnit を空文字にしてください。
 
 各項目の内容が互いに重複しないようにしてください（同じ情報を複数の項目に書かない）。JSON形式のみで出力してください。`;
 }
