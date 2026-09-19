@@ -45,6 +45,7 @@
   .prefs{display:flex; gap:18px; flex-wrap:wrap; font-size:.88rem;}
   .pref label{display:flex; align-items:center; gap:6px; cursor:pointer;}
   .pref input[type=checkbox]{width:16px; height:16px;}
+  .prefs-empty{color:var(--sub); font-size:.85rem;}
 
   .status{font-size:.85rem; color:var(--sub); min-height:1.4em; margin:6px 0 0;}
   .status.err{color:#c0554a;}
@@ -89,6 +90,7 @@
   .tag{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75em; font-weight:600;}
   .tag.good{background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good);}
   .tag.warn{background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn);}
+  .tag.ai{background:color-mix(in srgb, var(--accent) 20%, transparent); color:var(--accent-ink);}
 
   .pcard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:.8rem; color:var(--sub);}
 
@@ -98,12 +100,12 @@
 <body>
 <div class="wrap">
   <h1>マイチョイス（プロトタイプ）</h1>
-  <p class="lede">好みプロフィールをもとに、楽天市場の実データから中立に一覧化します。まだ手作りの試作段階なので、精度より「仕組みが動くか」を確認するためのものです。</p>
+  <p class="lede">好みプロフィールをもとに、楽天市場の実データから中立に一覧化します。ジャンルの判定・属性抽出はAI（Google Gemini）が行い、AIが使えない場合は簡易的なキーワード判定に自動で切り替わります。</p>
 
   <div class="panel">
     <h2>好みプロフィール</h2>
-    <p class="sub">検索キーワードに合わせて、下の項目は自動的に切り替わります。</p>
-    <div class="prefs" id="prefsContainer"></div>
+    <p class="sub">検索キーワードに合わせて、下の項目はAIが自動的に生成します（「おすすめは？」を押すと更新されます）。</p>
+    <div class="prefs" id="prefsContainer"><span class="prefs-empty">検索するとここに項目が表示されます。</span></div>
   </div>
 
   <div class="panel">
@@ -132,7 +134,7 @@
   </div>
 
   <p class="note">
-    「無添加」「産地」などの項目は商品名・説明文をこのページ内で簡易的にキーワード検出しているだけです（本当にそうであるかをこのページが判定・保証するものではありません）。空欄は「そう書かれていない／読み取れなかった」という意味で、該当しないという意味ではありません。単価（円/ml・円/gなど）や原材料・容器の種類も、商品名・説明文から自動抽出した参考情報です。抽出できなかった項目は「—」と表示されます。
+    好みプロフィールの項目、商品の関連性判定（無関係な商品の除外）、原材料・容器・容量の抽出は、AIによる自動判定です。AIが利用できない場合は商品名・説明文の簡易的なキーワード検出に切り替わります（この場合、関連性の低い商品は除外されません）。いずれの方法でも完全な精度は保証されないため、参考情報としてご利用ください。空欄・「—」は「読み取れなかった」という意味で、該当しないという意味ではありません。
   </p>
 </div>
 
@@ -148,9 +150,9 @@ const prefsContainer = document.getElementById("prefsContainer");
 const sortSelect = document.getElementById("sortSelect");
 
 let currentRows = [];
-let currentAttrIds = [];
+let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
 
-// 楽天に直接ではなく、自分のサーバー(/api/search)に問い合わせる
+// ===== 自分のサーバー（中継API）への問い合わせ =====
 async function apiRequest(params){
   const qs = new URLSearchParams(params);
   const r = await fetch(`/api/search?${qs.toString()}`);
@@ -162,8 +164,20 @@ async function apiRequest(params){
   return data;
 }
 
-// ===== 好みプロフィールの項目（属性）定義 =====
-// ジャンルに応じて、この中から一部だけを画面に出す。
+async function analyzeWithAI(keyword, itemsForAI){
+  const r = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, items: itemsForAI }),
+  });
+  const data = await r.json();
+  if(!r.ok){
+    throw new Error(data?.error || `HTTP ${r.status}`);
+  }
+  return data; // { attributes: [{id,label}], items: [{index, relevant, attrHits, ingredients, packaging, quantityValue, quantityUnit}] }
+}
+
+// ===== AIが使えないときの簡易フォールバック（キーワード検出） =====
 const ADDITIVE_WORDS = ["無添加", "化学調味料不使用", "保存料不使用", "着色料不使用", "添加物不使用"];
 const DOMESTIC_WORDS = ["国産", "和歌山", "紀州", "南高梅", "長野県産", "群馬県産", "奈良県産", "日本産", "日本製", "純国産"];
 const ORGANIC_WORDS = ["オーガニック", "有機栽培", "有機JAS", "有機農産物", "無農薬"];
@@ -171,18 +185,15 @@ const FAIRTRADE_WORDS = ["フェアトレード", "フェア・トレード", "F
 const DECAF_WORDS = ["デカフェ", "カフェインレス", "ノンカフェイン", "カフェイン0", "カフェインフリー"];
 const HANDMADE_WORDS = ["手作り", "手造り", "職人", "小規模生産", "自家製", "手摘み"];
 
-const ATTRS = {
-  cost:      { label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
-  additive:  { label: "無添加を重視する", words: ADDITIVE_WORDS, defaultChecked: true },
-  domestic:  { label: "国産（日本）を重視する", words: DOMESTIC_WORDS, defaultChecked: false },
-  organic:   { label: "オーガニック・有機栽培を重視する", words: ORGANIC_WORDS, defaultChecked: false },
-  fairtrade: { label: "フェアトレードを重視する", words: FAIRTRADE_WORDS, defaultChecked: false },
-  decaf:     { label: "カフェインレス・デカフェを重視する", words: DECAF_WORDS, defaultChecked: false },
-  handmade:  { label: "手作り・小規模生産を重視する", words: HANDMADE_WORDS, defaultChecked: false },
+const FALLBACK_ATTRS = {
+  additive:  { label: "無添加を重視する", words: ADDITIVE_WORDS },
+  domestic:  { label: "国産（日本）を重視する", words: DOMESTIC_WORDS },
+  organic:   { label: "オーガニック・有機栽培を重視する", words: ORGANIC_WORDS },
+  fairtrade: { label: "フェアトレードを重視する", words: FAIRTRADE_WORDS },
+  decaf:     { label: "カフェインレス・デカフェを重視する", words: DECAF_WORDS },
+  handmade:  { label: "手作り・小規模生産を重視する", words: HANDMADE_WORDS },
 };
-
-// キーワード → どの属性を出すか（最初にマッチしたジャンルを採用。どれにも当たらなければ既定セット）
-const GENRE_MAP = [
+const FALLBACK_GENRE_MAP = [
   { match: ["梅シロップ", "梅干し", "梅酒", "梅"], attrs: ["additive", "domestic", "handmade"] },
   { match: ["はちみつ", "蜂蜜", "ハチミツ"], attrs: ["additive", "domestic", "organic"] },
   { match: ["コーヒー", "珈琲"], attrs: ["organic", "fairtrade", "decaf"] },
@@ -191,28 +202,16 @@ const GENRE_MAP = [
   { match: ["米", "お米", "野菜", "果物", "フルーツ"], attrs: ["domestic", "organic"] },
   { match: ["醤油", "味噌", "みそ", "塩", "砂糖", "調味料"], attrs: ["additive", "domestic"] },
 ];
-const DEFAULT_ATTRS = ["additive", "domestic"];
+const FALLBACK_DEFAULT_ATTRS = ["additive", "domestic"];
 
-function getActiveAttrIds(keyword){
-  const hit = GENRE_MAP.find(g => g.match.some(m => keyword.includes(m)));
-  const rest = hit ? hit.attrs : DEFAULT_ATTRS;
-  return ["cost", ...rest];
+function fallbackAttrDefs(keyword){
+  const hit = FALLBACK_GENRE_MAP.find(g => g.match.some(m => keyword.includes(m)));
+  const ids = hit ? hit.attrs : FALLBACK_DEFAULT_ATTRS;
+  return ids.map((id, i) => ({ id, label: FALLBACK_ATTRS[id].label, defaultChecked: i === 0 }));
 }
+function matchesWords(text, words){ return words.some(w => text.includes(w)); }
 
-function renderPrefPanel(keyword){
-  currentAttrIds = getActiveAttrIds(keyword);
-  prefsContainer.innerHTML = currentAttrIds.map(id => {
-    const a = ATTRS[id];
-    const checked = a.defaultChecked ? "checked" : "";
-    return `<div class="pref"><label><input type="checkbox" id="pref_${id}" ${checked}> ${a.label}</label></div>`;
-  }).join("");
-}
-
-// ===== 商品テキストからの属性・情報抽出 =====
-function matchesWords(text, words){
-  return words.some(w => text.includes(w));
-}
-
+// ===== 商品テキストからの情報抽出（AIの結果が空のときの補完にも使う） =====
 const PACKAGING_TYPES = [
   { label: "瓶", words: ["ガラス瓶", "瓶入り", "びん入り", "瓶"] },
   { label: "パウチ", words: ["パウチ", "スタンドパウチ", "袋入り"] },
@@ -225,13 +224,10 @@ function detectPackaging(text){
   const hit = PACKAGING_TYPES.find(p => matchesWords(text, p.words));
   return hit ? hit.label : "";
 }
-
 function detectIngredients(text){
   const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
   return m ? m[1].trim() : "";
 }
-
-// ml/L/g/kg のいずれかを検出し、円/単位が計算できるように正規化する
 function detectQuantity(text){
   let m = text.match(/(\d+(?:\.\d+)?)\s*m ?l/i);
   if(m) return { value: Number(m[1]), unit: "ml" };
@@ -244,34 +240,68 @@ function detectQuantity(text){
   return null;
 }
 
-function computeScoresAndRender(items){
-  const rows = items.map(it => {
+// ===== 好みプロフィール欄の描画 =====
+function renderPrefPanel(attrDefs){
+  currentAttrDefs = attrDefs;
+  prefsContainer.innerHTML = attrDefs.map(a => {
+    const checked = a.defaultChecked ? "checked" : "";
+    return `<div class="pref"><label><input type="checkbox" id="pref_${a.id}" ${checked}> ${a.label}</label></div>`;
+  }).join("");
+}
+
+// ===== 商品データの組み立て（AI結果あり／なし共通） =====
+function buildRows(items, attrDefs, aiItemsByIndex){
+  const rows = [];
+  let excluded = 0;
+
+  items.forEach((it, idx) => {
     const item = it.Item || it; // APIバージョンによりItemでラップされる場合がある
     const text = `${item.itemName || ""} ${item.itemCaption || ""}`;
-    const qty = detectQuantity(text);
+    const ai = aiItemsByIndex ? aiItemsByIndex.get(idx) : null;
+
+    if(ai && ai.relevant === false){
+      excluded++;
+      return;
+    }
+
+    let qty = null, packaging = "", ingredients = "";
+    const attrHits = {};
+
+    if(ai){
+      qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
+      packaging = ai.packaging || detectPackaging(text);
+      ingredients = ai.ingredients || detectIngredients(text);
+      const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
+      attrDefs.forEach(a => { if(a.id !== "cost") attrHits[a.id] = hitMap.get(a.id) || false; });
+    }else{
+      qty = detectQuantity(text);
+      packaging = detectPackaging(text);
+      ingredients = detectIngredients(text);
+      attrDefs.forEach(a => {
+        if(a.id === "cost") return;
+        const words = (FALLBACK_ATTRS[a.id] && FALLBACK_ATTRS[a.id].words) || [];
+        attrHits[a.id] = matchesWords(text, words);
+      });
+    }
+
     const perUnit = qty ? item.itemPrice / qty.value : null;
 
-    const attrHits = {};
-    currentAttrIds.forEach(id => {
-      if(id === "cost") return;
-      attrHits[id] = matchesWords(text, ATTRS[id].words);
-    });
-
-    return {
+    rows.push({
       name: item.itemName,
       url: item.itemUrl,
       shop: item.shopName,
       price: item.itemPrice,
       qty, perUnit,
-      packaging: detectPackaging(text),
-      ingredients: detectIngredients(text),
-      attrHits,
+      packaging, ingredients, attrHits,
       rating: item.reviewAverage || null,
       reviews: item.reviewCount || 0,
-    };
+    });
   });
 
-  // コスパ用スコア（単価が低いほど高スコア。検出できないものは中間点）
+  return { rows, excluded };
+}
+
+function computeScores(rows, attrDefs){
   const knownPerUnit = rows.map(r => r.perUnit).filter(v => v !== null && v !== undefined);
   const maxPerUnit = Math.max(...knownPerUnit, 1);
   const minPerUnit = Math.min(...knownPerUnit, 0);
@@ -283,34 +313,33 @@ function computeScoresAndRender(items){
     }
     let score = 0;
     let weightSum = 0;
-    currentAttrIds.forEach(id => {
-      const cb = document.getElementById(`pref_${id}`);
+    attrDefs.forEach(a => {
+      const cb = document.getElementById(`pref_${a.id}`);
       if(!cb || !cb.checked) return;
       weightSum += 1;
-      if(id === "cost"){ score += costScore; }
-      else { score += (r.attrHits[id] ? 1 : 0.3); }
+      if(a.id === "cost"){ score += costScore; }
+      else { score += (r.attrHits[a.id] ? 1 : 0.3); }
     });
     r.score = weightSum ? score / weightSum : costScore;
-    r.costScore = costScore;
   });
-
-  currentRows = rows;
-  sortAndRender();
-  resultPanel.style.display = "block";
 }
 
 function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
 
-function renderCards(rows){
-  resultCountEl.textContent = `${rows.length}件`;
+function renderCards(rows, excludedCount){
+  resultCountEl.textContent = excludedCount
+    ? `${rows.length}件（関連性が低いと判定された${excludedCount}件を除外）`
+    : `${rows.length}件`;
+
   cardsEl.innerHTML = rows.map(r => {
     const qtyValue = r.qty ? `${r.qty.value.toLocaleString("ja-JP")}${r.qty.unit}` : "—";
     const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "—";
-    const chips = currentAttrIds
-      .filter(id => id !== "cost")
-      .map(id => {
-        const hit = r.attrHits[id];
-        return `<span class="tag ${hit ? "good" : "warn"}">${ATTRS[id].label.replace(/を重視する$/, "")}${hit ? "" : "：未検出"}</span>`;
+    const chips = currentAttrDefs
+      .filter(a => a.id !== "cost")
+      .map(a => {
+        const hit = r.attrHits[a.id];
+        const shortLabel = a.label.replace(/を重視する$/, "");
+        return `<span class="tag ${hit ? "good" : "warn"}">${shortLabel}${hit ? "" : "：未検出"}</span>`;
       }).join("");
 
     return `
@@ -363,37 +392,77 @@ function sortAndRender(){
     if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
     return (b.score||0) - (a.score||0);
   });
-  renderCards(rows);
+  renderCards(rows, sortAndRender.excludedCount || 0);
 }
 sortSelect.addEventListener("change", sortAndRender);
 
 async function runSearch(){
   const keyword = document.getElementById("q").value.trim();
   if(!keyword){ return; }
-  renderPrefPanel(keyword);
   goBtn.disabled = true;
   statusEl.className = "status";
   statusEl.textContent = "検索中…";
   resultPanel.style.display = "none";
+  prefsContainer.innerHTML = `<span class="prefs-empty">分析中…</span>`;
+
   try{
     const data = await apiRequest({ keyword, hits: 20 });
     const items = data.Items || [];
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
+      prefsContainer.innerHTML = `<span class="prefs-empty">検索するとここに項目が表示されます。</span>`;
       return;
     }
-    computeScoresAndRender(items);
-    statusEl.textContent = `${items.length}件取得しました。`;
+
+    const itemsForAI = items.map((it, index) => {
+      const item = it.Item || it;
+      return {
+        index,
+        name: item.itemName || "",
+        caption: (item.itemCaption || "").slice(0, 300),
+      };
+    });
+
+    statusEl.textContent = "AIでジャンルを分析中…";
+
+    let attrDefs, aiItemsByIndex, aiFailed = false;
+    try{
+      const ai = await analyzeWithAI(keyword, itemsForAI);
+      const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost").slice(0, 4);
+      attrDefs = [
+        { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+        ...aiAttrs.map((a, i) => ({ id: a.id, label: a.label, defaultChecked: i === 0 })),
+      ];
+      aiItemsByIndex = new Map((ai.items || []).map(r => [r.index, r]));
+    }catch(e){
+      aiFailed = true;
+      attrDefs = [
+        { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+        ...fallbackAttrDefs(keyword),
+      ];
+      aiItemsByIndex = null;
+    }
+
+    renderPrefPanel(attrDefs);
+
+    const { rows, excluded } = buildRows(items, attrDefs, aiItemsByIndex);
+    computeScores(rows, attrDefs);
+    currentRows = rows;
+    sortAndRender.excludedCount = excluded;
+    sortAndRender();
+    resultPanel.style.display = "block";
+
+    statusEl.textContent = aiFailed
+      ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています）`
+      : `${items.length}件取得しました。`;
   }catch(e){
     statusEl.className = "status err";
     statusEl.textContent = "エラー: " + e.message;
+    prefsContainer.innerHTML = `<span class="prefs-empty">検索するとここに項目が表示されます。</span>`;
   }finally{
     goBtn.disabled = false;
   }
 }
-
-// 初期表示
-renderPrefPanel(document.getElementById("q").value.trim());
 
 goBtn.addEventListener("click", runSearch);
 document.getElementById("q").addEventListener("keydown", e => { if(e.key === "Enter") runSearch(); });
