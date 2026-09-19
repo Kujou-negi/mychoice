@@ -229,6 +229,22 @@ function detectIngredients(text){
   const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
   return m ? m[1].trim() : "";
 }
+// AIが使えないときの簡易な商品名圧縮（先頭の「本体名」らしき部分だけ残す）
+function compactName(name){
+  if(!name) return "";
+  // 【】や[]で囲まれた煽り文句、記号区切り以降の羅列を切り落とす
+  let s = name.replace(/【[^】]*】/g, "").trim();
+  const cutPoints = [" ", "　", "／", "/", "|", "｜"];
+  let cutIndex = -1;
+  for(const c of cutPoints){
+    const i = s.indexOf(c, 8); // 先頭8文字より後ろで最初に見つかった区切りで切る
+    if(i > 0 && (cutIndex === -1 || i < cutIndex)) cutIndex = i;
+  }
+  if(cutIndex > 0) s = s.slice(0, cutIndex);
+  if(s.length > 30) s = s.slice(0, 30) + "…";
+  return s || name.slice(0, 30);
+}
+
 function detectQuantity(text){
   let m = text.match(/(\d+(?:\.\d+)?)\s*m ?l/i);
   if(m) return { value: Number(m[1]), unit: "ml" };
@@ -265,19 +281,22 @@ function buildRows(items, attrDefs, aiItemsByIndex){
       return;
     }
 
-    let qty = null, packaging = "", ingredients = "";
+    let qty = null, packaging = "", ingredients = "", displayName = "", summary = "";
     const attrHits = {};
 
     if(ai){
       qty = (ai.quantityValue && ai.quantityUnit) ? { value: ai.quantityValue, unit: ai.quantityUnit } : detectQuantity(text);
       packaging = ai.packaging || detectPackaging(text);
       ingredients = ai.ingredients || detectIngredients(text);
+      displayName = ai.shortName || compactName(item.itemName);
+      summary = ai.summary || "";
       const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
       attrDefs.forEach(a => { if(a.id !== "cost") attrHits[a.id] = hitMap.get(a.id) || false; });
     }else{
       qty = detectQuantity(text);
       packaging = detectPackaging(text);
       ingredients = detectIngredients(text);
+      displayName = compactName(item.itemName);
       attrDefs.forEach(a => {
         if(a.id === "cost") return;
         const words = (FALLBACK_ATTRS[a.id] && FALLBACK_ATTRS[a.id].words) || [];
@@ -289,6 +308,7 @@ function buildRows(items, attrDefs, aiItemsByIndex){
 
     rows.push({
       name: item.itemName,
+      displayName, summary,
       url: item.itemUrl,
       shop: item.shopName,
       price: item.itemPrice,
@@ -347,8 +367,8 @@ function renderCards(rows, excludedCount){
     <div class="product-card">
       <div class="pcard-top">
         <div>
-          <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener">${r.name}</a></div>
-          <div class="pcard-shop">${r.shop}</div>
+          <div class="pcard-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
+          <div class="pcard-shop">${r.shop}${r.summary ? ` ・ ${r.summary}` : ""}</div>
         </div>
         <div class="pcard-score">
           <span class="num">${(r.score * 100).toFixed(0)}</span>
