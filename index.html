@@ -126,6 +126,10 @@
   .p-attrs .hit{color:var(--good);}
   .p-attrs .miss{color:var(--bad);}
   .p-shop{font-size:.72rem; color:var(--text-sub); margin-top:2px;}
+  .p-mall{
+    display:inline-block; font-size:.66rem; font-weight:700; color:var(--accent);
+    border:1px solid var(--accent); border-radius:3px; padding:0 4px; margin-right:2px;
+  }
 
   .p-side{
     flex-shrink:0; width:118px; text-align:right;
@@ -139,6 +143,29 @@
   .p-rating{font-size:.76rem; margin-top:4px; white-space:nowrap;}
   .p-rating .count{color:var(--text-sub); font-weight:400;}
   @media (max-width:520px){ .p-side{width:90px;} .p-price{font-size:.92rem;} }
+
+  .badge-cheapest{
+    display:inline-block; font-size:.68rem; font-weight:700; color:#fff;
+    background:var(--price); border-radius:3px; padding:2px 6px; margin-bottom:3px;
+  }
+
+  .buying-guide{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:14px 16px; margin-bottom:14px;
+  }
+  .bg-heading{font-size:.85rem; font-weight:700; margin:0 0 8px;}
+  .bg-tip{
+    font-size:.8rem; background:var(--bg); border-radius:6px; padding:8px 10px;
+    margin:0 0 10px; line-height:1.5;
+  }
+  .bg-columns{display:flex; gap:20px; flex-wrap:wrap;}
+  .bg-col{flex:1; min-width:200px;}
+  .bg-col h3{font-size:.76rem; color:var(--text-sub); margin:0 0 6px; font-weight:700;}
+  .bg-col ul{margin:0; padding-left:1.1em; font-size:.78rem; line-height:1.6;}
+  .bg-col dl{margin:0; font-size:.78rem; line-height:1.5;}
+  .bg-col dt{font-weight:700; margin-top:6px;}
+  .bg-col dt:first-child{margin-top:0;}
+  .bg-col dd{margin:0 0 2px; color:var(--text-sub);}
 
   .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
   .exclude-list .filter-item input{accent-color:var(--price);}
@@ -241,6 +268,7 @@
     </div>
 
     <div id="resultPanel" style="display:none;">
+      <div class="buying-guide" id="buyingGuidePanel" style="display:none;"></div>
       <div class="result-bar">
         <span class="result-count" id="resultCount"></span>
         <select id="sortSelect">
@@ -269,11 +297,13 @@ const sortSelect = document.getElementById("sortSelect");
 const progressWrap = document.getElementById("progressWrap");
 const progressBar = document.getElementById("progressBar");
 const loadingScene = document.getElementById("loadingScene");
+const buyingGuidePanel = document.getElementById("buyingGuidePanel");
 
 let currentRows = [];
 let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
 let currentSpecFields = []; // [{id, label}] ジャンルに応じた客観スペック項目（AIが生成、または簡易フォールバック）
 let excludeWakeari = false; // 「訳あり品を除外する」チェックの状態
+let currentSpecificProduct = false; // 型番・特定商品の検索に見えるかどうか（AI判定）
 
 // ===== 進捗バー（検索〜AI分析は正確な進捗が分からないため、それらしく進んでいるように見せる擬似的なもの） =====
 let progressTimer = null;
@@ -315,15 +345,35 @@ function playChestOpen(){
 }
 
 // ===== 自分のサーバー（中継API）への問い合わせ =====
-async function apiRequest(params){
+async function apiRequest(endpoint, params){
   const qs = new URLSearchParams(params);
-  const r = await fetch(`/api/search?${qs.toString()}`);
+  const r = await fetch(`${endpoint}?${qs.toString()}`);
   const data = await r.json();
   if(!r.ok){
     const msg = data?.errors?.errorMessage || data?.error || `HTTP ${r.status}`;
     throw new Error(msg);
   }
   return data;
+}
+
+// Yahoo!ショッピングAPI(v3)のhitsを、楽天のItem形式に合わせた共通の形に変換する。
+// こうすることで、buildRows以下の処理を楽天・Yahoo!で共通のまま使い回せる。
+function yahooHitToItem(hit){
+  const image = hit.image || {};
+  return {
+    itemName: hit.name || "",
+    itemCaption: hit.description || hit.headLine || "",
+    itemPrice: hit.price || 0,
+    itemUrl: hit.url || "",
+    shopName: (hit.seller && hit.seller.name) || "Yahoo!ショッピング",
+    mediumImageUrls: image.medium ? [{ imageUrl: image.medium }] : (image.small ? [{ imageUrl: image.small }] : []),
+    // 楽天のpostageFlag（0:送料無料 / 1:送料別）に合わせる。Yahoo!のshipping.codeの正確な対応表が
+    // 無いため、名前に「無料」と入っているときだけ送料無料とみなす簡易判定にしている。
+    postageFlag: (hit.shipping && /無料/.test(hit.shipping.name || "")) ? 0 : 1,
+    reviewAverage: (hit.review && hit.review.rate) || 0,
+    reviewCount: (hit.review && hit.review.count) || 0,
+    _mall: "Yahoo!",
+  };
 }
 
 async function analyzeWithAI(keyword, itemsForAI){
@@ -527,6 +577,38 @@ function renderExcludePanel(rows){
   });
 }
 
+// ===== 「賢い選び方」パネルの描画（型番・特定商品の検索と判定されたときだけ表示） =====
+function renderBuyingGuide(guide){
+  const hasContent = guide && (
+    guide.cheapestTip ||
+    (guide.checkpoints && guide.checkpoints.length) ||
+    (guide.glossary && guide.glossary.length)
+  );
+  if(!hasContent){
+    buyingGuidePanel.style.display = "none";
+    buyingGuidePanel.innerHTML = "";
+    return;
+  }
+  const tipHtml = guide.cheapestTip ? `<p class="bg-tip">💡 ${guide.cheapestTip}</p>` : "";
+  const checkpointsHtml = (guide.checkpoints || [])
+    .filter(c => c.label)
+    .map(c => `<li><b>${c.label}</b>${c.note ? ` — ${c.note}` : ""}</li>`)
+    .join("");
+  const glossaryHtml = (guide.glossary || [])
+    .filter(g => g.term)
+    .map(g => `<dt>${g.term}</dt><dd>${g.explanation || ""}</dd>`)
+    .join("");
+  buyingGuidePanel.innerHTML = `
+    <p class="bg-heading">この商品を賢く選ぶには</p>
+    ${tipHtml}
+    <div class="bg-columns">
+      ${checkpointsHtml ? `<div class="bg-col"><h3>チェックポイント</h3><ul>${checkpointsHtml}</ul></div>` : ""}
+      ${glossaryHtml ? `<div class="bg-col"><h3>用語ミニ解説</h3><dl>${glossaryHtml}</dl></div>` : ""}
+    </div>
+  `;
+  buyingGuidePanel.style.display = "block";
+}
+
 // ===== 商品データの組み立て（AI結果あり／なし共通） =====
 // specFieldDefs: [{id,label}] ジャンルに応じた客観スペック項目（AIが生成、またはFALLBACK_SPEC_FIELDS）
 function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
@@ -590,6 +672,7 @@ function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, igno
       image: getImageUrl(item),
       url: item.itemUrl,
       shop: item.shopName,
+      mall: item._mall || "楽天",
       price: item.itemPrice,
       shipping: detectShipping(item),
       qty, perUnit,
@@ -728,9 +811,10 @@ function renderCards(rows, excludedInfo){
         ${r.feature ? `<div class="p-feature">${r.feature}</div>` : ""}
         ${specsLine ? `<div class="p-specs">${specsLine}</div>` : ""}
         ${attrsLine ? `<div class="p-attrs">${attrsLine}</div>` : ""}
-        <div class="p-shop">販売: ${r.shop}</div>
+        <div class="p-shop">${r.mall ? `<span class="p-mall">${r.mall}</span> ` : ""}販売: ${r.shop}</div>
       </div>
       <div class="p-side">
+        ${r.isCheapest ? `<span class="badge-cheapest">最安値</span>` : ""}
         <div class="p-price">${fmtYen(r.price)}</div>
         ${qtyDisplay ? `<div class="p-qty">${qtyDisplay}</div>` : ""}
         ${perUnitValue ? `<div class="p-perunit">${perUnitValue}</div>` : ""}
@@ -767,12 +851,26 @@ async function runSearch(){
   resultPanel.style.display = "none";
   prefsContainer.innerHTML = `<p class="empty-note">分析中…</p>`;
   excludeContainer.innerHTML = "";
+  buyingGuidePanel.style.display = "none";
+  buyingGuidePanel.innerHTML = "";
   startLoadingScene();
   startProgress();
 
   try{
-    const data = await apiRequest({ keyword, hits: 20 });
-    const items = data.Items || [];
+    // 楽天とYahoo!ショッピングを並行して検索する。Yahoo!側が失敗しても、楽天の結果だけで続行できるようにする。
+    let yahooFailed = false;
+    const [rakutenData, yahooItems] = await Promise.all([
+      apiRequest("/api/search", { keyword, hits: 30 }),
+      apiRequest("/api/searchYahoo", { keyword, hits: 30 })
+        .then(d => (d.hits || []).map(yahooHitToItem))
+        .catch(() => { yahooFailed = true; return []; }),
+    ]);
+    const rakutenItems = (rakutenData.Items || []).map(it => {
+      const item = it.Item || it;
+      item._mall = "楽天";
+      return item;
+    });
+    const items = [...rakutenItems, ...yahooItems];
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
       prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
@@ -796,6 +894,7 @@ async function runSearch(){
     const isWakeariLike = a => a.id === "wakeari" || /訳あり|わけあり|ワケあり/.test(a.label || "");
 
     let attrDefs, specFieldDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
+    let specificProduct = false, buyingGuide = null;
     try{
       const ai = await analyzeWithAI(keyword, itemsForAI);
       const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost" && !isWakeariLike(a)).slice(0, 4);
@@ -806,6 +905,9 @@ async function runSearch(){
       const aiSpecFields = (ai.specFields || []).filter(f => f.id && f.label).slice(0, 3);
       specFieldDefs = aiSpecFields.length ? aiSpecFields : FALLBACK_SPEC_FIELDS;
       aiItemsByIndex = new Map((ai.items || []).map(r => [r.index, r]));
+      // 型番・特定商品の検索に見えるときだけ、「最安値はここ」表示と賢い選び方ガイドを出す
+      specificProduct = !!ai.specificProduct;
+      buyingGuide = ai.buyingGuide || null;
     }catch(e){
       aiFailed = true;
       aiErrorMessage = e.message;
@@ -818,7 +920,9 @@ async function runSearch(){
     }
 
     currentSpecFields = specFieldDefs;
+    currentSpecificProduct = specificProduct;
     renderPrefPanel(attrDefs);
+    renderBuyingGuide(specificProduct ? buyingGuide : null);
 
     let relevanceIgnored = false;
     let built = buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex);
@@ -831,6 +935,14 @@ async function runSearch(){
     const { rows: builtRows, excluded } = built;
     const { rows, duplicates } = dedupeRows(builtRows);
     computeScores(rows, attrDefs);
+    // 型番・特定商品の検索のときは、一番安い1件に「最安値」バッジを付け、値段順を初期表示にする
+    if(specificProduct && rows.length){
+      const minPrice = Math.min(...rows.map(r => r.price));
+      rows.forEach(r => { r.isCheapest = r.price === minPrice; });
+      sortSelect.value = "price";
+    }else{
+      rows.forEach(r => { r.isCheapest = false; });
+    }
     currentRows = rows;
     renderExcludePanel(rows);
     sortAndRender.excludedInfo = { relevance: relevanceIgnored ? 0 : excluded, duplicates };
@@ -840,11 +952,12 @@ async function runSearch(){
     hideLoadingScene();
     resultPanel.style.display = "block";
 
-    statusEl.textContent = aiFailed
+    const yahooNote = yahooFailed ? "（Yahoo!ショッピングの検索は今回取得できませんでした）" : "";
+    statusEl.textContent = (aiFailed
       ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています / 詳細: ${aiErrorMessage}）`
       : relevanceIgnored
       ? `${rows.length}件取得しました。（AIが全件を無関係と判定したため、関連性の判定は今回無効にしています）`
-      : `${items.length}件取得しました。`;
+      : `${items.length}件取得しました。`) + yahooNote;
   }catch(e){
     statusEl.className = "status err";
     statusEl.textContent = "エラー: " + e.message;
