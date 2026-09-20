@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マイチョイス</title>
+<style>
+  :root{
+    --bg:#f2f3f5; --surface:#ffffff; --text:#16181c; --text-sub:#6b7280;
+    --border:#e2e4e8; --accent:#1a56db; --accent-hover:#154cc4;
+    --price:#c1272d; --good:#1a7f37; --bad:#9aa0a6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#101216; --surface:#1a1d23; --text:#e8e9eb; --text-sub:#9aa0a6;
+      --border:#2b2f38; --accent:#5b9dff; --accent-hover:#7cb0ff;
+      --price:#ff6b6b; --good:#4ade80; --bad:#6b7280;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Yu Gothic",system-ui,-apple-system,sans-serif;
+  }
+  a{color:inherit;}
+
+  .topbar{background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;}
+  .topbar-inner{
+    max-width:1080px; margin:0 auto; padding:12px 16px;
+    display:flex; align-items:center; gap:20px;
+  }
+  .brand{font-size:1rem; font-weight:800; letter-spacing:.02em; text-decoration:none; white-space:nowrap;}
+  .searchbox{flex:1; max-width:460px; display:flex;}
+  .searchbox input{
+    flex:1; min-width:0; padding:8px 12px; font-size:.88rem;
+    border:1px solid var(--border); border-right:none; border-radius:4px 0 0 4px;
+    background:var(--bg); color:var(--text);
+  }
+  .searchbox input:focus{outline:none; border-color:var(--accent);}
+  .searchbox input::placeholder{color:var(--text-sub);}
+  .searchbox button{
+    padding:8px 18px; border:none; border-radius:0 4px 4px 0; background:var(--accent);
+    color:#fff; font-weight:600; font-size:.85rem; cursor:pointer; white-space:nowrap;
+  }
+  .searchbox button:hover{background:var(--accent-hover);}
+  .searchbox button:disabled{opacity:.5; cursor:default;}
+
+  /* 検索前は Google のトップページのように、タイトルと検索窓を画面中央に大きく表示する */
+  body.home .topbar{
+    position:static; background:transparent; border-bottom:none;
+    min-height:64vh; display:flex; align-items:center; justify-content:center;
+  }
+  body.home .topbar-inner{
+    flex-direction:column; gap:22px; max-width:520px; width:100%; padding:16px;
+  }
+  body.home .brand{font-size:2rem;}
+  body.home .searchbox{max-width:100%; width:100%;}
+  body.home .layout{display:none;}
+
+  .layout{
+    max-width:1080px; margin:0 auto; padding:20px 16px 60px;
+    display:flex; align-items:flex-start; gap:28px;
+  }
+  .sidebar{width:200px; flex-shrink:0;}
+  @media (max-width:800px){
+    .layout{flex-direction:column; gap:16px;}
+    .sidebar{width:100%;}
+  }
+
+  .sidebar h2{
+    font-size:.82rem; font-weight:700; margin:0 0 8px; padding-bottom:6px;
+    border-bottom:1px solid var(--border);
+  }
+  .filter-list{display:flex; flex-direction:column; gap:1px; font-size:.83rem;}
+  .filter-item{display:flex; align-items:center; gap:7px; padding:5px 2px; cursor:pointer;}
+  .filter-item input{width:14px; height:14px; accent-color:var(--accent); flex-shrink:0;}
+  .empty-note{color:var(--text-sub); font-size:.8rem; margin:0;}
+
+  .main{flex:1; min-width:0;}
+  .status{font-size:.8rem; color:var(--text-sub); min-height:1.2em; margin:0;}
+  .status.err{color:#c0392b;}
+
+  .progress-wrap{
+    width:100%; height:3px; background:var(--border); overflow:hidden;
+    margin:6px 0 4px; display:none;
+  }
+  .progress-bar{height:100%; width:0%; background:var(--accent); transition:width .25s ease;}
+
+  .result-bar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border);
+    font-size:.8rem;
+  }
+  .result-count{color:var(--text-sub);}
+  select{
+    padding:5px 8px; border:1px solid var(--border); border-radius:4px;
+    background:var(--surface); color:var(--text); font-size:.8rem;
+  }
+
+  .product-list{list-style:none; margin:0; padding:0;}
+  .product-row{display:flex; gap:12px; padding:14px 2px; border-bottom:1px solid var(--border);}
+
+  .p-thumb{
+    flex-shrink:0; width:104px; height:104px; display:block; overflow:hidden;
+    border:1px solid var(--border); border-radius:4px; background:var(--surface);
+  }
+  .p-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .p-thumb.empty{
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    color:var(--text-sub); font-size:.68rem; padding:6px;
+  }
+  @media (max-width:520px){ .p-thumb{width:76px; height:76px;} }
+
+  .p-info{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+  .p-name{font-size:.88rem; font-weight:600; line-height:1.4;}
+  .p-name a{text-decoration:none;}
+  .p-name a:hover{color:var(--accent); text-decoration:underline;}
+  .p-meta{font-size:.76rem; color:var(--text-sub);}
+  .p-meta .origin{font-weight:700; color:var(--text); margin-right:8px;}
+  .p-feature{font-size:.76rem; color:var(--text-sub);}
+  .p-specs{font-size:.76rem; color:var(--text-sub);}
+  .p-specs span{margin-right:12px; white-space:nowrap;}
+  .p-specs b{color:var(--text); font-weight:600;}
+  .p-attrs{font-size:.74rem; margin-top:2px;}
+  .p-attrs span{margin-right:10px; white-space:nowrap;}
+  .p-attrs .hit{color:var(--good);}
+  .p-attrs .miss{color:var(--bad);}
+  .p-shop{font-size:.72rem; color:var(--text-sub); margin-top:2px;}
+
+  .p-side{
+    flex-shrink:0; width:118px; text-align:right;
+    display:flex; flex-direction:column; align-items:flex-end; gap:2px;
+  }
+  .p-price{font-size:1.05rem; font-weight:800; color:var(--price); white-space:nowrap;}
+  .p-qty{font-size:.76rem; color:var(--text); font-weight:600; white-space:nowrap;}
+  .p-perunit{font-size:.7rem; color:var(--text-sub);}
+  .p-shipping{font-size:.7rem; color:var(--text-sub);}
+  .p-shipping.free{color:var(--good); font-weight:600;}
+  .p-rating{font-size:.76rem; margin-top:4px; white-space:nowrap;}
+  .p-rating .count{color:var(--text-sub); font-weight:400;}
+  @media (max-width:520px){ .p-side{width:90px;} .p-price{font-size:.92rem;} }
+
+  .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
+  .exclude-list .filter-item input{accent-color:var(--price);}
+
+  /* ===== 検索中のアニメーション：黄色い丸い生き物が宝箱を開ける ===== */
+  .loading-scene{
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:38px 0 30px;
+  }
+  .chest-wrap{position:relative; width:100px; height:70px; perspective:300px;}
+  .chest-body{
+    position:absolute; bottom:0; left:0; width:100px; height:44px;
+    background:#8a5a2b; border:3px solid #5c3a1a; border-radius:0 0 10px 10px; box-sizing:border-box;
+  }
+  .chest-body::after{
+    content:""; position:absolute; left:44px; top:-2px; width:12px; height:14px;
+    background:#f2c14e; border:2px solid #5c3a1a; border-radius:3px; box-sizing:border-box;
+  }
+  .chest-lid{
+    position:absolute; top:0; left:0; width:100px; height:26px;
+    background:#a5702f; border:3px solid #5c3a1a; border-radius:12px 12px 3px 3px; box-sizing:border-box;
+    transform-origin:bottom center; transform:rotateX(0deg);
+    animation:chest-wiggle 1.2s ease-in-out infinite;
+  }
+  @keyframes chest-wiggle{
+    0%,100%{ transform:rotateX(0deg); }
+    50%{ transform:rotateX(-10deg); }
+  }
+  .mochi{
+    position:relative; width:52px; height:52px; border-radius:50%;
+    background:#ffd23f; border:3px solid #e0a800; box-sizing:border-box;
+    animation:mochi-bounce 1.2s ease-in-out infinite;
+  }
+  @keyframes mochi-bounce{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-9px); }
+  }
+  .mochi-eye{ position:absolute; top:19px; width:6px; height:8px; background:#4a3300; border-radius:50%; }
+  .mochi-eye.left{ left:13px; } .mochi-eye.right{ right:13px; }
+  .mochi-mouth{
+    position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+    width:14px; height:7px; border-bottom:3px solid #4a3300; border-radius:0 0 10px 10px;
+  }
+  .sparkles{ position:absolute; inset:-10px; pointer-events:none; }
+  .sparkles span{
+    position:absolute; top:36%; left:50%; width:6px; height:6px;
+    background:#ffe066; border-radius:50%; opacity:0;
+  }
+  .sparkles span:nth-child(1){ --tx:-38px; --ty:-34px; }
+  .sparkles span:nth-child(2){ --tx:0px;   --ty:-46px; }
+  .sparkles span:nth-child(3){ --tx:38px;  --ty:-34px; }
+  .sparkles span:nth-child(4){ --tx:-22px; --ty:-16px; }
+  .sparkles span:nth-child(5){ --tx:22px;  --ty:-16px; }
+  .loading-caption{font-size:.78rem; color:var(--text-sub); margin:0;}
+
+  .loading-scene.opening .chest-lid{
+    animation:none; transform:rotateX(-120deg); transition:transform .45s ease-out;
+  }
+  .loading-scene.opening .mochi{ animation:none; transform:translateY(-9px) scale(1.06); }
+  .loading-scene.opening .sparkles span{ animation:sparkle-burst .55s ease-out forwards; }
+  @keyframes sparkle-burst{
+    0%{ opacity:1; transform:scale(.2) translate(0, 0); }
+    100%{ opacity:0; transform:scale(1) translate(var(--tx), var(--ty)); }
+  }
+</style>
+</head>
+<body class="home">
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">マイチョイス</span>
+    <div class="searchbox">
+      <input type="text" id="q" placeholder="何を探していますか？" />
+      <button id="go">検索</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <h2>絞り込み</h2>
+    <div class="filter-list" id="prefsContainer"><p class="empty-note">検索すると表示されます</p></div>
+    <div class="exclude-list" id="excludeContainer"></div>
+  </aside>
+
+  <main class="main">
+    <p class="status" id="status"></p>
+    <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="loading-scene" id="loadingScene" style="display:none;">
+      <div class="chest-wrap">
+        <div class="chest-lid"></div>
+        <div class="chest-body"></div>
+        <div class="sparkles"><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="mochi">
+        <div class="mochi-eye left"></div>
+        <div class="mochi-eye right"></div>
+        <div class="mochi-mouth"></div>
+      </div>
+      <p class="loading-caption">お宝を探しています…</p>
+    </div>
+
+    <div id="resultPanel" style="display:none;">
+      <div class="result-bar">
+        <span class="result-count" id="resultCount"></span>
+        <select id="sortSelect">
+          <option value="score">おすすめ順</option>
+          <option value="price">値段順</option>
+          <option value="perunit">単価が安い順</option>
+          <option value="rating">口コミ評価順</option>
+        </select>
+      </div>
+      <ul class="product-list" id="cards"></ul>
+    </div>
+  </main>
+</div>
+
+<script>
+// ▼ このページを github.io で公開して開いたときだけ、楽天側のリファラーチェックを通過します。
+//   ローカルでダブルクリックして開いただけでは実データは取得できません（HTTP_REFERRER_MISSING 等のエラーになります）。
+const statusEl = document.getElementById("status");
+const resultPanel = document.getElementById("resultPanel");
+const cardsEl = document.getElementById("cards");
+const resultCountEl = document.getElementById("resultCount");
+const goBtn = document.getElementById("go");
+const prefsContainer = document.getElementById("prefsContainer");
+const excludeContainer = document.getElementById("excludeContainer");
+const sortSelect = document.getElementById("sortSelect");
+const progressWrap = document.getElementById("progressWrap");
+const progressBar = document.getElementById("progressBar");
+const loadingScene = document.getElementById("loadingScene");
+
+let currentRows = [];
+let currentAttrDefs = []; // [{id, label, defaultChecked}] cost を含む
+let currentSpecFields = []; // [{id, label}] ジャンルに応じた客観スペック項目（AIが生成、または簡易フォールバック）
+let excludeWakeari = false; // 「訳あり品を除外する」チェックの状態
+
+// ===== 進捗バー（検索〜AI分析は正確な進捗が分からないため、それらしく進んでいるように見せる擬似的なもの） =====
+let progressTimer = null;
+function startProgress(){
+  clearInterval(progressTimer);
+  progressBar.style.width = "0%";
+  progressWrap.style.display = "block";
+  let pct = 0;
+  progressTimer = setInterval(() => {
+    // 90%までは徐々に近づけ、実際に終わるまで100%にはしない（応答待ちであることが分かるように）
+    pct += (90 - pct) * 0.12 + 0.5;
+    if(pct > 90) pct = 90;
+    progressBar.style.width = pct.toFixed(1) + "%";
+  }, 200);
+}
+function finishProgress(){
+  clearInterval(progressTimer);
+  progressBar.style.width = "100%";
+  setTimeout(() => {
+    progressWrap.style.display = "none";
+    progressBar.style.width = "0%";
+  }, 350);
+}
+
+// 検索中は宝箱の前で待機する黄色い生き物を表示し、結果が揃った瞬間に宝箱を開けてから結果を見せる
+function startLoadingScene(){
+  loadingScene.classList.remove("opening");
+  loadingScene.style.display = "flex";
+}
+function hideLoadingScene(){
+  loadingScene.classList.remove("opening");
+  loadingScene.style.display = "none";
+}
+function playChestOpen(){
+  return new Promise(resolve => {
+    loadingScene.classList.add("opening");
+    setTimeout(resolve, 550);
+  });
+}
+
+// ===== 自分のサーバー（中継API）への問い合わせ =====
+async function apiRequest(params){
+  const qs = new URLSearchParams(params);
+  const r = await fetch(`/api/search?${qs.toString()}`);
+  const data = await r.json();
+  if(!r.ok){
+    const msg = data?.errors?.errorMessage || data?.error || `HTTP ${r.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+async function analyzeWithAI(keyword, itemsForAI){
+  const r = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, items: itemsForAI }),
+  });
+  const data = await r.json();
+  if(!r.ok){
+    const detail = data?.raw ? ` / ${data.raw.slice(0, 200)}` : "";
+    throw new Error(`${data?.error || "error"} (HTTP ${data?.status || r.status})${detail}`);
+  }
+  return data; // { attributes: [{id,label}], specFields: [{id,label}], items: [{index, relevant, attrHits, specs:[{id,value}], origin, maker, feature, quantityValue, quantityUnit}] }
+}
+
+// ===== AIが使えないときの簡易フォールバック（キーワード検出） =====
+const ADDITIVE_WORDS = ["無添加", "化学調味料不使用", "保存料不使用", "着色料不使用", "添加物不使用"];
+const DOMESTIC_WORDS = ["国産", "和歌山", "紀州", "南高梅", "長野県産", "群馬県産", "奈良県産", "日本産", "日本製", "純国産"];
+const ORGANIC_WORDS = ["オーガニック", "有機栽培", "有機JAS", "有機農産物", "無農薬"];
+const FAIRTRADE_WORDS = ["フェアトレード", "フェア・トレード", "Fair Trade", "フェアトレード認証"];
+const DECAF_WORDS = ["デカフェ", "カフェインレス", "ノンカフェイン", "カフェイン0", "カフェインフリー"];
+const HANDMADE_WORDS = ["手作り", "手造り", "職人", "小規模生産", "自家製", "手摘み"];
+const WAKEARI_WORDS = ["訳あり", "わけあり", "ワケあり", "訳アリ", "規格外", "不揃い"];
+
+const FALLBACK_ATTRS = {
+  additive:  { label: "無添加", words: ADDITIVE_WORDS },
+  domestic:  { label: "国産（日本）", words: DOMESTIC_WORDS },
+  organic:   { label: "オーガニック・有機栽培", words: ORGANIC_WORDS },
+  fairtrade: { label: "フェアトレード", words: FAIRTRADE_WORDS },
+  decaf:     { label: "カフェインレス・デカフェ", words: DECAF_WORDS },
+  handmade:  { label: "手作り・小規模生産", words: HANDMADE_WORDS },
+};
+// 「訳あり」はスコアで重み付けする好み属性ではなく、該当商品を一覧から除外する専用チェックとして扱う
+// （絞り込み項目としてではなく、実際に検索結果に混ざっているときだけ excludeContainer に表示する。renderExcludePanel参照）
+const FALLBACK_GENRE_MAP = [
+  { match: ["梅シロップ", "梅干し", "梅酒", "梅"], attrs: ["additive", "domestic", "handmade"] },
+  { match: ["はちみつ", "蜂蜜", "ハチミツ"], attrs: ["additive", "domestic", "organic"] },
+  { match: ["コーヒー", "珈琲"], attrs: ["organic", "fairtrade", "decaf"] },
+  { match: ["紅茶", "緑茶", "煎茶", "お茶", "茶葉"], attrs: ["organic", "fairtrade", "domestic"] },
+  { match: ["チョコ", "カカオ", "ショコラ"], attrs: ["fairtrade", "organic", "handmade"] },
+  { match: ["米", "お米", "野菜", "果物", "フルーツ"], attrs: ["domestic", "organic"] },
+  { match: ["醤油", "味噌", "みそ", "塩", "砂糖", "調味料"], attrs: ["additive", "domestic"] },
+];
+const FALLBACK_DEFAULT_ATTRS = ["additive", "domestic"];
+
+// 産地（都道府県）を表示するのは食品・飲料ジャンルのときだけにするための簡易判定
+const FOOD_KEYWORDS = FALLBACK_GENRE_MAP.flatMap(g => g.match).concat([
+  "食品", "食材", "フード", "お菓子", "菓子", "スイーツ", "飲料", "ドリンク", "飲み物",
+  "酒", "肉", "魚", "海鮮", "野菜", "果物", "フルーツ", "パン", "麺", "スープ", "調味料", "だし",
+]);
+function isFoodKeyword(keyword){
+  return FOOD_KEYWORDS.some(w => keyword.includes(w));
+}
+
+// AIが使えないときの簡易フォールバック用のスペック項目（食品向けの3項目に固定）
+const FALLBACK_SPEC_FIELDS = [
+  { id: "qty", label: "容量" },
+  { id: "packaging", label: "容器" },
+  { id: "ingredients", label: "原材料" },
+];
+
+function fallbackAttrDefs(keyword){
+  const hit = FALLBACK_GENRE_MAP.find(g => g.match.some(m => keyword.includes(m)));
+  const ids = hit ? hit.attrs : FALLBACK_DEFAULT_ATTRS;
+  return ids.map((id, i) => ({ id, label: FALLBACK_ATTRS[id].label, defaultChecked: i === 0 }));
+}
+function matchesWords(text, words){ return words.some(w => text.includes(w)); }
+
+// ===== 商品テキストからの情報抽出（AIの結果が空のときの補完にも使う） =====
+const PACKAGING_TYPES = [
+  { label: "瓶", words: ["ガラス瓶", "瓶入り", "びん入り", "瓶"] },
+  { label: "パウチ", words: ["パウチ", "スタンドパウチ", "袋入り"] },
+  { label: "缶", words: ["缶入り", "缶詰", "缶"] },
+  { label: "ペットボトル", words: ["ペットボトル", "PET"] },
+  { label: "箱", words: ["化粧箱", "箱入り", "BOX", "ボックス"] },
+  { label: "パック", words: ["パック"] },
+];
+function detectPackaging(text){
+  const hit = PACKAGING_TYPES.find(p => matchesWords(text, p.words));
+  return hit ? hit.label : "";
+}
+function detectIngredients(text){
+  const m = text.match(/原材料[名]?[:：]?\s*([^\n。]{2,120})/);
+  return m ? m[1].trim() : "";
+}
+// AIが使えないときの簡易な産地（都道府県）検出。本文中に都道府県名が含まれていれば、それを産地とみなす。
+const PREFECTURES = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県",
+  "三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県",
+];
+function detectOrigin(text){
+  return PREFECTURES.find(p => text.includes(p)) || "";
+}
+// 楽天APIのpostageFlag（0:送料込み/送料無料表示、1:送料別）から送料表示を作る
+function detectShipping(item){
+  if(item.postageFlag === 0) return { free: true, label: "送料無料" };
+  if(item.postageFlag === 1) return { free: false, label: "送料別" };
+  return null;
+}
+// 楽天の画像URLは "?_ex=128x128" のようなパラメータでサイズが小さく指定されていることが多いので、
+// 表示に使うため大きいサイズを要求し直す（画質自体はサーバー側の元画像次第だが、縮小し過ぎた画像よりは綺麗になる）
+function upsizeImage(url){
+  if(!url) return url;
+  if(/_ex=\d+x\d+/.test(url)) return url.replace(/_ex=\d+x\d+/, "_ex=600x600");
+  return url + (url.includes("?") ? "&" : "?") + "_ex=600x600";
+}
+
+// 楽天APIのレスポンスから商品画像URLを取り出す（バージョンによって形が微妙に違うため、いくつかの形に対応する）
+function getImageUrl(item){
+  const candidates = [item.mediumImageUrls, item.smallImageUrls];
+  for(const arr of candidates){
+    if(Array.isArray(arr) && arr.length > 0){
+      const first = arr[0];
+      const url = typeof first === "string" ? first : (first && first.imageUrl);
+      if(url) return upsizeImage(url.replace(/^http:\/\//, "https://"));
+    }
+  }
+  if(typeof item.imageUrl === "string" && item.imageUrl) return upsizeImage(item.imageUrl.replace(/^http:\/\//, "https://"));
+  return "";
+}
+
+// AIが使えないときの簡易な商品名圧縮（先頭の「本体名」らしき部分だけ残す）
+function compactName(name){
+  if(!name) return "";
+  // 【】や[]で囲まれた煽り文句、記号区切り以降の羅列を切り落とす
+  let s = name.replace(/【[^】]*】/g, "").trim();
+  const cutPoints = [" ", "　", "／", "/", "|", "｜"];
+  let cutIndex = -1;
+  for(const c of cutPoints){
+    const i = s.indexOf(c, 8); // 先頭8文字より後ろで最初に見つかった区切りで切る
+    if(i > 0 && (cutIndex === -1 || i < cutIndex)) cutIndex = i;
+  }
+  if(cutIndex > 0) s = s.slice(0, cutIndex);
+  if(s.length > 30) s = s.slice(0, 30) + "…";
+  return s || name.slice(0, 30);
+}
+
+function detectQuantity(text){
+  if(!text) return null;
+  let m = text.match(/(\d+(?:\.\d+)?)\s*m ?l/i);
+  if(m) return { value: Number(m[1]), unit: "ml" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*[lL](?![a-zA-Z])/);
+  if(m) return { value: Number(m[1]) * 1000, unit: "ml" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  if(m) return { value: Number(m[1]) * 1000, unit: "g" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*g(?![a-zA-Z])/i);
+  if(m) return { value: Number(m[1]), unit: "g" };
+  // 重量・体積の記載が無い商品（海苔の枚数など）は、個数単位でも単価比較できるようにする
+  m = text.match(/(\d+(?:\.\d+)?)\s*枚/);
+  if(m) return { value: Number(m[1]), unit: "枚" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*個/);
+  if(m) return { value: Number(m[1]), unit: "個" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*本/);
+  if(m) return { value: Number(m[1]), unit: "本" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*袋/);
+  if(m) return { value: Number(m[1]), unit: "袋" };
+  m = text.match(/(\d+(?:\.\d+)?)\s*玉/);
+  if(m) return { value: Number(m[1]), unit: "玉" };
+  return null;
+}
+
+// ===== 好みプロフィール欄の描画 =====
+function renderPrefPanel(attrDefs){
+  currentAttrDefs = attrDefs;
+  prefsContainer.innerHTML = attrDefs.map(a => {
+    const checked = a.defaultChecked ? "checked" : "";
+    return `<label class="filter-item"><input type="checkbox" id="pref_${a.id}" ${checked}> ${a.label}</label>`;
+  }).join("");
+  // チェックボックスを切り替えたら、その場でスコアを再計算して並び替え直す
+  attrDefs.forEach(a => {
+    const cb = document.getElementById(`pref_${a.id}`);
+    if(cb) cb.addEventListener("change", onPrefChange);
+  });
+}
+
+function onPrefChange(){
+  if(currentRows.length === 0) return;
+  computeScores(currentRows, currentAttrDefs);
+  sortAndRender();
+}
+
+// ===== 「訳あり品を除外する」欄の描画（実際に訳あり品が混ざっているときだけ表示する） =====
+function renderExcludePanel(rows){
+  const hasWakeari = rows.some(r => r.wakeari);
+  if(!hasWakeari){
+    excludeContainer.innerHTML = "";
+    excludeWakeari = false;
+    return;
+  }
+  excludeContainer.innerHTML = `<label class="filter-item"><input type="checkbox" id="excludeWakeariCb" ${excludeWakeari ? "checked" : ""}> 訳あり品を除外する</label>`;
+  const cb = document.getElementById("excludeWakeariCb");
+  cb.addEventListener("change", () => {
+    excludeWakeari = cb.checked;
+    sortAndRender();
+  });
+}
+
+// ===== 商品データの組み立て（AI結果あり／なし共通） =====
+// specFieldDefs: [{id,label}] ジャンルに応じた客観スペック項目（AIが生成、またはFALLBACK_SPEC_FIELDS）
+function buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, ignoreRelevance){
+  const rows = [];
+  let excluded = 0;
+  const isFood = isFoodKeyword(keyword);
+
+  items.forEach((it, idx) => {
+    const item = it.Item || it; // APIバージョンによりItemでラップされる場合がある
+    const text = `${item.itemName || ""} ${item.itemCaption || ""}`;
+    const ai = aiItemsByIndex ? aiItemsByIndex.get(idx) : null;
+
+    if(!ignoreRelevance && ai && ai.relevant === false){
+      excluded++;
+      return;
+    }
+
+    let qty = null, displayName = "", origin = "", maker = "", feature = "";
+    const specValues = {};
+    const attrHits = {};
+
+    if(ai){
+      displayName = ai.shortName || compactName(item.itemName);
+      origin = isFood ? (ai.origin || detectOrigin(text)) : "";
+      maker = ai.maker || "";
+      feature = ai.feature || "";
+      const specMap = new Map((ai.specs || []).map(s => [s.id, s.value]));
+      specFieldDefs.forEach(f => { specValues[f.id] = specMap.get(f.id) || ""; });
+      // 単価計算は、画面にそのまま表示する「容量」欄のテキストから直接抽出する。
+      // AIが単価計算専用に別枠で返す数値を使うと、表示は「50枚」なのに単価だけ謎のg換算になる、
+      // といった表示と計算の食い違いが起きるため、常に同じ数値から両方を出す。
+      qty = detectQuantity(specValues.qty) || detectQuantity(text);
+      const hitMap = new Map((ai.attrHits || []).map(h => [h.id, !!h.hit]));
+      attrDefs.forEach(a => { if(a.id !== "cost") attrHits[a.id] = hitMap.get(a.id) || false; });
+    }else{
+      qty = detectQuantity(text);
+      displayName = compactName(item.itemName);
+      origin = isFood ? detectOrigin(text) : "";
+      // フォールバック時はFALLBACK_SPEC_FIELDSのidに合わせて簡易抽出する
+      specFieldDefs.forEach(f => {
+        if(f.id === "qty") specValues.qty = qty ? `${qty.value}${qty.unit}` : "";
+        else if(f.id === "packaging") specValues.packaging = detectPackaging(text);
+        else if(f.id === "ingredients") specValues.ingredients = detectIngredients(text);
+        else specValues[f.id] = "";
+      });
+      attrDefs.forEach(a => {
+        if(a.id === "cost") return;
+        const words = (FALLBACK_ATTRS[a.id] && FALLBACK_ATTRS[a.id].words) || [];
+        attrHits[a.id] = matchesWords(text, words);
+      });
+    }
+
+    // 「訳あり」はAIの判定やジャンル判定に頼らず、ジャンルを問わず常にキーワード検出で確実に判定する
+    const wakeari = matchesWords(text, WAKEARI_WORDS);
+
+    const perUnit = qty ? item.itemPrice / qty.value : null;
+
+    rows.push({
+      name: item.itemName,
+      displayName, origin, maker, feature,
+      image: getImageUrl(item),
+      url: item.itemUrl,
+      shop: item.shopName,
+      price: item.itemPrice,
+      shipping: detectShipping(item),
+      qty, perUnit,
+      specValues, attrHits, wakeari,
+      rating: item.reviewAverage || null,
+      reviews: item.reviewCount || 0,
+    });
+  });
+
+  return { rows, excluded };
+}
+
+// 同じ商品が別の店舗から重複して出てくることがあるため、まとめる。
+// 画像URLは店舗ごとに違う写真を使っていることが多く一致しないので、
+// 「商品名（要約後）＋価格＋容量」が一致するものを同一商品とみなす。
+// まとめる際は、片方に欠けている情報（スペック項目・画像など）をもう片方から補う。
+function mergeRowInfo(base, other){
+  const merged = { ...base };
+  merged.specValues = { ...(other.specValues || {}), ...(base.specValues || {}) };
+  Object.keys(other.specValues || {}).forEach(k => {
+    if(!merged.specValues[k] && other.specValues[k]) merged.specValues[k] = other.specValues[k];
+  });
+  if(!merged.origin && other.origin) merged.origin = other.origin;
+  if(!merged.maker && other.maker) merged.maker = other.maker;
+  if(!merged.feature && other.feature) merged.feature = other.feature;
+  if(!merged.shipping && other.shipping) merged.shipping = other.shipping;
+  if(!merged.qty && other.qty) merged.qty = other.qty;
+  if(!merged.perUnit && other.perUnit) merged.perUnit = other.perUnit;
+  if(!merged.image && other.image) merged.image = other.image;
+  if((merged.rating === null || merged.rating === undefined) && other.rating != null) merged.rating = other.rating;
+  if(!merged.reviews && other.reviews) merged.reviews = other.reviews;
+  merged.wakeari = !!(base.wakeari || other.wakeari); // どちらかで訳あり検出されていれば訳ありとみなす
+  merged.attrHits = { ...other.attrHits, ...base.attrHits };
+  // どちらかで検出されていればOKとする（陽性シグナルを優先）
+  Object.keys(other.attrHits || {}).forEach(k => {
+    if(other.attrHits[k] && !merged.attrHits[k]) merged.attrHits[k] = true;
+  });
+  return merged;
+}
+
+function dedupeRows(rows){
+  const seen = new Map();
+  const kept = [];
+  let duplicates = 0;
+
+  rows.forEach(r => {
+    const normName = (r.displayName || r.name || "").replace(/[\s　・、,／\/【】()（）]/g, "");
+    const key = `${normName}|${r.price}|${r.qty ? r.qty.value + r.qty.unit : ""}`;
+
+    if(seen.has(key)){
+      duplicates++;
+      const existingIdx = seen.get(key);
+      const existing = kept[existingIdx];
+      // 口コミ件数が多い方（＝より実績があり信頼できそうな方）を代表として残しつつ、
+      // 足りない項目はもう片方から補う
+      const primary = (r.reviews || 0) > (existing.reviews || 0) ? r : existing;
+      const secondary = primary === r ? existing : r;
+      kept[existingIdx] = mergeRowInfo(primary, secondary);
+    }else{
+      seen.set(key, kept.length);
+      kept.push(r);
+    }
+  });
+
+  return { rows: kept, duplicates };
+}
+
+function computeScores(rows, attrDefs){
+  const knownPerUnit = rows.map(r => r.perUnit).filter(v => v !== null && v !== undefined);
+  const maxPerUnit = Math.max(...knownPerUnit, 1);
+  const minPerUnit = Math.min(...knownPerUnit, 0);
+
+  rows.forEach(r => {
+    let costScore = 0.5;
+    if(r.perUnit !== null && maxPerUnit > minPerUnit){
+      costScore = 1 - (r.perUnit - minPerUnit) / (maxPerUnit - minPerUnit);
+    }
+    let score = 0;
+    let weightSum = 0;
+    attrDefs.forEach(a => {
+      const cb = document.getElementById(`pref_${a.id}`);
+      if(!cb || !cb.checked) return;
+      weightSum += 1;
+      if(a.id === "cost"){ score += costScore; }
+      else { score += (r.attrHits[a.id] ? 1 : 0.3); }
+    });
+    r.score = weightSum ? score / weightSum : costScore;
+  });
+}
+
+function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
+
+function renderCards(rows, excludedInfo){
+  const { relevance = 0, duplicates = 0, wakeari = 0 } = excludedInfo || {};
+  const notes = [];
+  if(relevance) notes.push(`関連性が低いと判定された${relevance}件`);
+  if(duplicates) notes.push(`重複していた${duplicates}件`);
+  if(wakeari) notes.push(`訳あり品${wakeari}件`);
+  resultCountEl.textContent = notes.length
+    ? `${rows.length}件（${notes.join("、")}を除外）`
+    : `${rows.length}件`;
+
+  cardsEl.innerHTML = rows.map(r => {
+    const perUnitValue = r.perUnit ? `${r.perUnit.toFixed(2)}円/${r.qty.unit}` : "";
+    // 容量（qty）は値段の下にセットで表示するので、その他のスペック一覧からは重複を避けて除く
+    const qtyDisplay = (r.specValues || {}).qty || "";
+    const specsLine = currentSpecFields
+      .filter(f => f.id !== "qty")
+      .map(f => {
+        const val = (r.specValues || {})[f.id] || "";
+        return val ? `<span><b>${f.label}</b> ${val}</span>` : "";
+      })
+      .filter(Boolean)
+      .join("");
+    // 該当しない属性は「×」で否定的に見せず、そもそも表示しない（該当するものだけをタグのように示す）
+    const attrsLine = currentAttrDefs
+      .filter(a => a.id !== "cost")
+      .filter(a => r.attrHits[a.id])
+      .map(a => `<span class="hit">○ ${a.label}</span>`)
+      .join("");
+
+    const metaBits = [];
+    if(r.origin) metaBits.push(`<span class="origin">${r.origin}</span>`);
+    if(r.maker) metaBits.push(r.maker);
+
+    const thumb = r.image
+      ? `<a class="p-thumb" href="${r.url}" target="_blank" rel="noopener"><img src="${r.image}" alt="" loading="lazy" onerror="this.closest('.p-thumb').outerHTML='&lt;div class=&quot;p-thumb empty&quot;&gt;画像なし&lt;/div&gt;'"></a>`
+      : `<div class="p-thumb empty">画像なし</div>`;
+
+    return `
+    <li class="product-row">
+      ${thumb}
+      <div class="p-info">
+        <div class="p-name"><a href="${r.url}" target="_blank" rel="noopener" title="${r.name.replace(/"/g, '&quot;')}">${r.displayName || r.name}</a></div>
+        ${metaBits.length ? `<div class="p-meta">${metaBits.join(" ")}</div>` : ""}
+        ${r.feature ? `<div class="p-feature">${r.feature}</div>` : ""}
+        ${specsLine ? `<div class="p-specs">${specsLine}</div>` : ""}
+        ${attrsLine ? `<div class="p-attrs">${attrsLine}</div>` : ""}
+        <div class="p-shop">販売: ${r.shop}</div>
+      </div>
+      <div class="p-side">
+        <div class="p-price">${fmtYen(r.price)}</div>
+        ${qtyDisplay ? `<div class="p-qty">${qtyDisplay}</div>` : ""}
+        ${perUnitValue ? `<div class="p-perunit">${perUnitValue}</div>` : ""}
+        <div class="p-shipping ${r.shipping && r.shipping.free ? "free" : ""}">${r.shipping ? r.shipping.label : ""}</div>
+        <div class="p-rating">${r.rating ? `★${r.rating}` : "評価なし"}${r.reviews ? ` <span class="count">(${r.reviews})</span>` : ""}</div>
+      </div>
+    </li>
+    `;
+  }).join("");
+}
+
+function sortAndRender(){
+  const key = sortSelect.value;
+  const wakeariExcludedCount = excludeWakeari ? currentRows.filter(r => r.wakeari).length : 0;
+  const base = excludeWakeari ? currentRows.filter(r => !r.wakeari) : currentRows;
+  const rows = [...base].sort((a,b) => {
+    if(key === "price") return a.price - b.price;
+    if(key === "rating") return (b.rating||0) - (a.rating||0);
+    if(key === "perunit") return (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity);
+    return (b.score||0) - (a.score||0);
+  });
+  const info = { ...(sortAndRender.excludedInfo || {}), wakeari: wakeariExcludedCount };
+  renderCards(rows, info);
+}
+sortSelect.addEventListener("change", sortAndRender);
+
+async function runSearch(){
+  const keyword = document.getElementById("q").value.trim();
+  if(!keyword){ return; }
+  document.body.classList.remove("home");
+  goBtn.disabled = true;
+  statusEl.className = "status";
+  statusEl.textContent = "検索中…";
+  resultPanel.style.display = "none";
+  prefsContainer.innerHTML = `<p class="empty-note">分析中…</p>`;
+  excludeContainer.innerHTML = "";
+  startLoadingScene();
+  startProgress();
+
+  try{
+    const data = await apiRequest({ keyword, hits: 20 });
+    const items = data.Items || [];
+    if(items.length === 0){
+      statusEl.textContent = "商品が見つかりませんでした。";
+      prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
+      hideLoadingScene();
+      return;
+    }
+
+    const itemsForAI = items.map((it, index) => {
+      const item = it.Item || it;
+      return {
+        index,
+        name: item.itemName || "",
+        caption: (item.itemCaption || "").slice(0, 300),
+      };
+    });
+
+    statusEl.textContent = "AIでジャンルを分析中…";
+
+    // 「訳あり」は独立した除外専用チェックとして扱うため、AIが同じ概念の属性を別idで生成しても
+    // 好みプロフィール（attrDefs）には含めない（重複除外）
+    const isWakeariLike = a => a.id === "wakeari" || /訳あり|わけあり|ワケあり/.test(a.label || "");
+
+    let attrDefs, specFieldDefs, aiItemsByIndex, aiFailed = false, aiErrorMessage = "";
+    try{
+      const ai = await analyzeWithAI(keyword, itemsForAI);
+      const aiAttrs = (ai.attributes || []).filter(a => a.id && a.id !== "cost" && !isWakeariLike(a)).slice(0, 4);
+      attrDefs = [
+        { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+        ...aiAttrs.map((a, i) => ({ id: a.id, label: a.label, defaultChecked: i === 0 })),
+      ];
+      const aiSpecFields = (ai.specFields || []).filter(f => f.id && f.label).slice(0, 3);
+      specFieldDefs = aiSpecFields.length ? aiSpecFields : FALLBACK_SPEC_FIELDS;
+      aiItemsByIndex = new Map((ai.items || []).map(r => [r.index, r]));
+    }catch(e){
+      aiFailed = true;
+      aiErrorMessage = e.message;
+      attrDefs = [
+        { id: "cost", label: "コスパ重視（単価が安い順を優先）", defaultChecked: true },
+        ...fallbackAttrDefs(keyword).filter(a => !isWakeariLike(a)),
+      ];
+      specFieldDefs = FALLBACK_SPEC_FIELDS;
+      aiItemsByIndex = null;
+    }
+
+    currentSpecFields = specFieldDefs;
+    renderPrefPanel(attrDefs);
+
+    let relevanceIgnored = false;
+    let built = buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex);
+    // AIが全件（またはほぼ全件）を「無関係」と判定した場合は、判定ミスの可能性が高いとみなし、
+    // 関連性フィルタだけ無効にして出し直す（0件のまま検索結果が消えてしまうのを防ぐ）
+    if(aiItemsByIndex && items.length > 0 && built.rows.length === 0){
+      relevanceIgnored = true;
+      built = buildRows(keyword, items, attrDefs, specFieldDefs, aiItemsByIndex, true);
+    }
+    const { rows: builtRows, excluded } = built;
+    const { rows, duplicates } = dedupeRows(builtRows);
+    computeScores(rows, attrDefs);
+    currentRows = rows;
+    renderExcludePanel(rows);
+    sortAndRender.excludedInfo = { relevance: relevanceIgnored ? 0 : excluded, duplicates };
+    sortAndRender();
+    // 結果が揃った瞬間に宝箱を開けてから結果一覧を見せる
+    await playChestOpen();
+    hideLoadingScene();
+    resultPanel.style.display = "block";
+
+    statusEl.textContent = aiFailed
+      ? `${rows.length}件取得しました。（AI分析が利用できなかったため簡易判定を使用しています / 詳細: ${aiErrorMessage}）`
+      : relevanceIgnored
+      ? `${rows.length}件取得しました。（AIが全件を無関係と判定したため、関連性の判定は今回無効にしています）`
+      : `${items.length}件取得しました。`;
+  }catch(e){
+    statusEl.className = "status err";
+    statusEl.textContent = "エラー: " + e.message;
+    prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
+    hideLoadingScene();
+  }finally{
+    goBtn.disabled = false;
+    finishProgress();
+  }
+}
+
+goBtn.addEventListener("click", runSearch);
+document.getElementById("q").addEventListener("keydown", e => { if(e.key === "Enter") runSearch(); });
+</script>
+</body>
+</html>
