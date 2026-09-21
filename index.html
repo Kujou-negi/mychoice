@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>マイチョイス</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f2f3f5; --surface:#ffffff; --text:#16181c; --text-sub:#6b7280;
@@ -184,91 +187,43 @@
   .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
   .exclude-list .filter-item input{accent-color:var(--price);}
 
-  /* ===== 検索中のアニメーション：黒いキャンバスに白い墨（インク）が飛び散り、竜の姿になっていく ===== */
+  /* ===== 検索中のアニメーション：高級腕時計風のゴールドの針時計。検索中はくるくる回り、
+     結果が揃った瞬間に12:00でピタッと止まる ===== */
   .loading-scene{
     display:flex; justify-content:center; align-items:center;
     padding:20px 0 10px;
   }
-  .ink-canvas{
+  .clock-canvas{
     position:relative;
-    width:100%; max-width:360px; aspect-ratio:360/300;
-    background:radial-gradient(ellipse at 50% 40%, #1c1c1e 0%, #050505 78%);
+    width:100%; max-width:260px; aspect-ratio:800/882;
+    background:radial-gradient(ellipse at 50% 42%, #14161c 0%, #050608 80%);
     border-radius:18px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.35);
   }
-  .ink-svg{ width:100%; height:100%; display:block; }
+  .clock-svg{ width:100%; height:100%; display:block; }
 
-  /* ===== 検索中はくるくる回り、結果が揃った瞬間に12:00でピタッと止まる小さな時計 ===== */
-  .mini-clock{
-    position:absolute; top:10px; right:10px; width:15%; max-width:56px;
-    filter:drop-shadow(0 2px 5px rgba(0,0,0,.5));
-  }
-  .mini-clock-face{ fill:rgba(255,255,255,.05); stroke:#e8c98a; stroke-opacity:.55; stroke-width:3; }
-  .mini-clock-tick{ stroke:#e8c98a; stroke-opacity:.5; stroke-width:3; stroke-linecap:round; }
-  .clock-hand{
-    transform-box:view-box; transform-origin:50px 50px; stroke-linecap:round;
-    transition:transform .55s cubic-bezier(.2,.8,.25,1.3);
-  }
-  .clock-hub{ fill:#e8c98a; }
-  .loading-scene.ticking .clock-hand.hour-hand{ animation:spin-clock 6s linear infinite; }
-  .loading-scene.ticking .clock-hand.minute-hand{ animation:spin-clock 2.2s linear infinite; }
-  .loading-scene.ticking .clock-hand.second-hand{ animation:spin-clock .85s linear infinite; }
-  @keyframes spin-clock{ to{ transform:rotate(360deg); } }
-  .loading-scene.time-up .clock-hand{ animation:none; transform:rotate(0deg); }
+  .clock-numeral{ font-family:'Playfair Display',Georgia,serif; font-weight:700; }
+  .clock-tick-major{ stroke:#d4af37; }
+  .clock-tick-minor{ stroke:rgba(212,175,55,.3); }
 
-  .ink-flash{ opacity:0; transform-box:fill-box; transform-origin:50% 50%; }
+  /* 針は元データの描画角度ぶんだけ最初から回転させて、静止状態で正しく12:00を指すようにする */
+  #hour-hand-group, #minute-hand-group, #second-hand-group{
+    transform-box:view-box; transform-origin:400px 430px;
+    transition:transform .6s cubic-bezier(.2,.8,.25,1.3);
+  }
+  #hour-hand-group{ transform:rotate(1.08deg); }
+  #minute-hand-group{ transform:rotate(104.5deg); }
+  #second-hand-group{ transform:rotate(-139.63deg); }
 
-  .ink-splat{
-    opacity:0; transform-box:fill-box; transform-origin:50% 50%;
-    animation:ink-pop .5s cubic-bezier(.2,.9,.3,1.2) forwards, ink-breathe 2.4s ease-in-out 3.6s infinite;
-  }
-  .ink-splat.d1{ animation-delay:0s, 3.6s; }
-  .ink-splat.d2{ animation-delay:.08s, 3.6s; }
-  .ink-splat.d3{ animation-delay:.16s, 3.6s; }
-  .ink-splat.d4{ animation-delay:.22s, 3.6s; }
-  .ink-splat.d5{ animation-delay:.3s, 3.6s; }
-  .ink-splat.d6{ animation-delay:.36s, 3.6s; }
-  @keyframes ink-pop{
-    0%{ opacity:0; transform:scale(.15); }
-    65%{ opacity:1; transform:scale(1.12); }
-    100%{ opacity:1; transform:scale(1); }
-  }
-  @keyframes ink-breathe{
-    0%,100%{ transform:scale(1); }
-    50%{ transform:scale(1.035); }
-  }
+  .loading-scene.ticking #hour-hand-group{ animation:spin-hour 6s linear infinite; transition:none; }
+  .loading-scene.ticking #minute-hand-group{ animation:spin-minute 2.2s linear infinite; transition:none; }
+  .loading-scene.ticking #second-hand-group{ animation:spin-second .85s linear infinite; transition:none; }
+  @keyframes spin-hour{ from{ transform:rotate(1.08deg); } to{ transform:rotate(361.08deg); } }
+  @keyframes spin-minute{ from{ transform:rotate(104.5deg); } to{ transform:rotate(464.5deg); } }
+  @keyframes spin-second{ from{ transform:rotate(-139.63deg); } to{ transform:rotate(220.37deg); } }
 
-  .ink-dragon{
-    fill:none; stroke:#f5f5f5; stroke-linecap:round; stroke-linejoin:round;
-    stroke-dasharray:1400; stroke-dashoffset:1400;
-    animation:dragon-draw 2.1s cubic-bezier(.5,0,.2,1) .55s forwards;
-    filter:drop-shadow(0 0 6px rgba(255,255,255,.35));
-  }
-  .ink-dragon-fill{
-    fill:#f5f5f5; opacity:0;
-    animation:dragon-fill-in .8s ease-out 2.3s forwards;
-  }
-  @keyframes dragon-draw{ to{ stroke-dashoffset:0; } }
-  @keyframes dragon-fill-in{ to{ opacity:1; } }
-
-  .ink-drop{ opacity:0; transform-box:fill-box; transform-origin:50% 0%; }
-  .ink-drop.dr1{ animation:drop-fall 1.3s ease-in 1.1s infinite; }
-  .ink-drop.dr2{ animation:drop-fall 1.5s ease-in 1.6s infinite; }
-  .ink-drop.dr3{ animation:drop-fall 1.4s ease-in 2.0s infinite; }
-  @keyframes drop-fall{
-    0%{ opacity:0; transform:translateY(0) scale(1); }
-    10%{ opacity:.85; }
-    85%{ opacity:.5; }
-    100%{ opacity:0; transform:translateY(46px) scale(.6); }
-  }
-
-  .loading-scene.opening .ink-flash{
-    animation:ink-flash-burst .6s ease-out forwards;
-  }
-  @keyframes ink-flash-burst{
-    0%{ opacity:0; transform:scale(.5); }
-    45%{ opacity:.9; transform:scale(1.3); }
-    100%{ opacity:0; transform:scale(1.7); }
-  }
+  .loading-scene.time-up #hour-hand-group{ animation:none; transform:rotate(1.08deg); }
+  .loading-scene.time-up #minute-hand-group{ animation:none; transform:rotate(104.5deg); }
+  .loading-scene.time-up #second-hand-group{ animation:none; transform:rotate(-139.63deg); }
 </style>
 </head>
 <body class="home">
@@ -293,69 +248,77 @@
     <p class="status" id="status"></p>
     <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
     <div class="loading-scene" id="loadingScene" style="display:none;">
-      <div class="ink-canvas">
-        <svg class="ink-svg" viewBox="0 0 360 300" role="img" aria-label="読み込み中">
+      <div class="clock-canvas">
+        <svg class="clock-svg" id="clockSvg" viewBox="0 0 800 882" fill="none" role="img" aria-label="検索中の時計">
+          <g id="dial-face">
+            <circle cx="400" cy="430" r="380" fill="url(#dialBgGradient)" stroke="#2a2415" stroke-width="3"/>
+            <circle cx="400" cy="430" r="365" stroke="url(#goldRimGradient)" stroke-width="1.5" stroke-dasharray="2 4" opacity="0.6"/>
+            <text class="clock-numeral" x="400" y="145" text-anchor="middle" dominant-baseline="middle" fill="#fef08a" font-size="42" letter-spacing="2">XII</text>
+            <text class="clock-numeral" x="690" y="435" text-anchor="middle" dominant-baseline="middle" fill="#fef08a" font-size="42">III</text>
+            <text class="clock-numeral" x="400" y="725" text-anchor="middle" dominant-baseline="middle" fill="#fef08a" font-size="42">VI</text>
+            <text class="clock-numeral" x="110" y="435" text-anchor="middle" dominant-baseline="middle" fill="#fef08a" font-size="42">IX</text>
+          </g>
+
+          <!-- 60分の目盛り（JSで生成） -->
+          <g id="ticks-container"></g>
+
+          <mask id="mask0_256_20810" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="800" height="883">
+            <path d="M0 0H800V882H0V0Z" fill="#D9D9D9"></path>
+          </mask>
+
+          <g mask="url(#mask0_256_20810)">
+            <g id="hour-hand-group">
+              <path d="M401.817 437.507L397.326 437.572L388.545 370.113L397.647 305.35L409.279 366.793L401.817 437.507Z" fill="url(#paint4_linear_256_20810)"></path>
+              <path d="M396.974 437.98L396.928 437.624L388.14 370.11L388.146 370.056L397.589 302.875L409.685 366.775L402.179 437.903L396.974 437.98ZM388.951 370.115L397.679 437.164L401.455 437.109L408.873 366.808L397.707 307.824L388.951 370.115Z" fill="url(#paint5_linear_256_20810)"></path>
+            </g>
+            <g id="minute-hand-group">
+              <path d="M404.803 424.636L405.962 428.974L281.816 468.156L198.189 482.176L277.365 452.686L404.803 424.636Z" fill="url(#paint2_linear_256_20810)"></path>
+              <path d="M198.255 482.572L198.048 481.799L277.224 452.309L405.091 424.16L406.45 429.243L281.937 468.541L198.255 482.572ZM404.512 425.112L277.45 453.079L202.277 481.082L281.749 467.761L405.473 428.707L404.512 425.112Z" fill="url(#paint3_linear_256_20810)"></path>
+            </g>
+            <g id="second-hand-group">
+              <path d="M359.616 388.467L387.272 420.645L391.675 423.348L527.328 579.757L528.031 579.152L393.788 421.532L391.777 416.772L364.123 384.594L359.616 388.467Z" fill="url(#paint0_linear_256_20810)"></path>
+              <path d="M527.285 580.323L527.023 580.02L391.411 423.659L386.967 420.907L359.048 388.424L364.165 384.027L392.148 416.615L394.134 421.319L528.597 579.195L527.285 580.323ZM387.535 420.335L391.979 423.084L527.368 579.189L527.464 579.106L393.441 421.747L391.431 416.987L364.08 385.163L360.184 388.512L387.535 420.335Z" fill="url(#paint1_linear_256_20810)"></path>
+            </g>
+            <circle cx="400" cy="430" r="14" fill="#000" stroke="url(#paint0_linear_256_20810)" stroke-width="3"/>
+            <circle cx="400" cy="430" r="6" fill="#FFF7B4"/>
+          </g>
+
           <defs>
-            <path id="inkBlob" d="M0,-24 C11,-26 22,-15 24,-2 C26,11 15,22 2,24 C-11,26 -24,15 -26,0 C-28,-14 -12,-22 0,-24 Z"/>
-            <radialGradient id="rgFlash" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
-              <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+            <linearGradient id="paint0_linear_256_20810" x1="74.6286" y1="806.073" x2="991.406" y2="5.83459" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <linearGradient id="paint1_linear_256_20810" x1="74.6288" y1="806.072" x2="991.405" y2="5.83582" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <linearGradient id="paint2_linear_256_20810" x1="-0.657067" y1="719.824" x2="916.121" y2="-80.4145" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <linearGradient id="paint3_linear_256_20810" x1="-0.608124" y1="719.879" x2="916.169" y2="-80.3583" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <linearGradient id="paint4_linear_256_20810" x1="-0.113029" y1="720.446" x2="916.667" y2="-79.793" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <linearGradient id="paint5_linear_256_20810" x1="-0.561946" y1="719.932" x2="916.217" y2="-80.3069" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFF7B4"></stop>
+              <stop offset="0.8876" stop-color="#825022"></stop>
+            </linearGradient>
+            <radialGradient id="dialBgGradient" cx="400" cy="430" r="380" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#161922"/>
+              <stop offset="70%" stop-color="#0c0e13"/>
+              <stop offset="100%" stop-color="#050608"/>
             </radialGradient>
-          </defs>
-
-          <!-- 飛び散る墨（インク） -->
-          <g fill="#f5f5f5">
-            <use class="ink-splat d3" href="#inkBlob" transform="translate(118,108) rotate(12) scale(0.85)"/>
-            <use class="ink-splat d1" href="#inkBlob" transform="translate(180,128) rotate(-4) scale(1.15)"/>
-            <use class="ink-splat d5" href="#inkBlob" transform="translate(214,96) rotate(-22) scale(0.6)"/>
-            <use class="ink-splat d2" href="#inkBlob" transform="translate(150,178) rotate(35) scale(0.9)"/>
-            <use class="ink-splat d6" href="#inkBlob" transform="translate(226,168) rotate(-12) scale(0.55)"/>
-            <use class="ink-splat d4" href="#inkBlob" transform="translate(96,168) rotate(58) scale(0.6)"/>
-          </g>
-
-          <!-- 飛び散った墨から滴が垂れる -->
-          <g fill="#f5f5f5">
-            <ellipse class="ink-drop dr1" cx="118" cy="128" rx="4" ry="6"/>
-            <ellipse class="ink-drop dr2" cx="226" cy="186" rx="3.5" ry="5.5"/>
-            <ellipse class="ink-drop dr3" cx="96" cy="186" rx="3" ry="5"/>
-          </g>
-
-          <!-- 墨がまとまってできる竜 -->
-          <path class="ink-dragon" d="M74,236
-            C50,210 54,178 90,168
-            C126,158 118,128 152,120
-            C180,113 170,145 196,150
-            C218,154 210,120 234,100
-            C250,86 244,60 268,44"
-            stroke-width="13"/>
-          <g class="ink-dragon-fill">
-            <path d="M268,44 C280,42 292,48 296,60 C299,69 294,78 285,80 C293,84 296,94 291,102 C286,110 274,110 267,102
-              C270,94 264,88 256,90 C262,80 260,68 268,60 C262,56 262,48 268,44 Z"/>
-            <path d="M276,46 C282,36 292,32 300,36 C294,40 291,46 292,52 Z"/>
-            <path d="M282,50 C290,42 300,40 306,45 C299,47 295,52 295,58 Z"/>
-            <circle cx="280" cy="66" r="3.4" fill="#050505"/>
-          </g>
-
-          <g class="ink-flash"><circle cx="180" cy="150" r="130" fill="url(#rgFlash)"/></g>
-        </svg>
-
-        <!-- 検索中はくるくる回り、結果が揃うと12:00でピタッと止まる小さな時計 -->
-        <svg class="mini-clock" viewBox="0 0 100 100" role="img" aria-label="検索中の時計">
-          <defs>
-            <linearGradient id="clockGrad" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90">
-              <stop offset="0%" stop-color="#fff7b4"/>
-              <stop offset="100%" stop-color="#c8925a"/>
+            <linearGradient id="goldRimGradient" x1="100" y1="100" x2="700" y2="700" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFF7B4"/>
+              <stop offset="50%" stop-color="#825022"/>
+              <stop offset="100%" stop-color="#D4AF37"/>
             </linearGradient>
           </defs>
-          <circle class="mini-clock-face" cx="50" cy="50" r="45"/>
-          <line class="mini-clock-tick" x1="50" y1="8" x2="50" y2="15"/>
-          <line class="mini-clock-tick" x1="92" y1="50" x2="85" y2="50"/>
-          <line class="mini-clock-tick" x1="50" y1="92" x2="50" y2="85"/>
-          <line class="mini-clock-tick" x1="8" y1="50" x2="15" y2="50"/>
-          <line class="clock-hand hour-hand" x1="50" y1="50" x2="50" y2="31" stroke="url(#clockGrad)" stroke-width="5"/>
-          <line class="clock-hand minute-hand" x1="50" y1="50" x2="50" y2="19" stroke="url(#clockGrad)" stroke-width="3.6"/>
-          <line class="clock-hand second-hand" x1="50" y1="50" x2="50" y2="15" stroke="url(#clockGrad)" stroke-width="2"/>
-          <circle class="clock-hub" cx="50" cy="50" r="2.6"/>
         </svg>
       </div>
     </div>
@@ -422,7 +385,7 @@ function finishProgress(){
   }, 350);
 }
 
-// 検索中は宝箱の前で待機する黄色い生き物を表示し、結果が揃った瞬間に宝箱を開けてから結果を見せる
+// 検索中は金色の時計の針がくるくる回り、結果が揃った瞬間に12:00でピタッと止まってから結果を見せる
 function startLoadingScene(){
   loadingScene.classList.remove("opening");
   loadingScene.classList.remove("time-up");
@@ -453,6 +416,28 @@ function playChestOpen(){
     setTimeout(resolve, 550);
   });
 }
+
+// 時計の文字盤に60分の目盛りを描く（中心(400,430)・半径360、5分ごとは太く金色、それ以外は細く控えめに）
+(function generateClockTicks(){
+  const container = document.getElementById("ticks-container");
+  if(!container) return;
+  const CX = 400, CY = 430, radius = 360;
+  let html = "";
+  for(let i = 0; i < 60; i++){
+    const angleDeg = i * 6;
+    const angleRad = (angleDeg - 90) * (Math.PI / 180);
+    const isHourTick = i % 5 === 0;
+    const tickLength = isHourTick ? 16 : 8;
+    const strokeWidth = isHourTick ? 3 : 1;
+    const cls = isHourTick ? "clock-tick-major" : "clock-tick-minor";
+    const x1 = CX + Math.cos(angleRad) * (radius - tickLength);
+    const y1 = CY + Math.sin(angleRad) * (radius - tickLength);
+    const x2 = CX + Math.cos(angleRad) * radius;
+    const y2 = CY + Math.sin(angleRad) * radius;
+    html += `<line class="${cls}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${strokeWidth}" stroke-linecap="round"/>`;
+  }
+  container.innerHTML = html;
+})();
 
 // ===== 自分のサーバー（中継API）への問い合わせ =====
 async function apiRequest(endpoint, params){
