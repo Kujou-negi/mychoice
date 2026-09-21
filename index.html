@@ -170,65 +170,59 @@
   .exclude-list{margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
   .exclude-list .filter-item input{accent-color:var(--price);}
 
-  /* ===== 検索中のアニメーション：黄色い丸い生き物が宝箱を開ける ===== */
+  /* ===== 検索中のアニメーション：黄色い丸い生き物が宝箱を開ける（大きめのSVGアニメーション） ===== */
   .loading-scene{
-    display:flex; flex-direction:column; align-items:center; gap:14px;
-    padding:38px 0 30px;
+    display:flex; justify-content:center; align-items:center;
+    padding:20px 0 10px;
   }
-  .chest-wrap{position:relative; width:100px; height:70px; perspective:300px;}
-  .chest-body{
-    position:absolute; bottom:0; left:0; width:100px; height:44px;
-    background:#8a5a2b; border:3px solid #5c3a1a; border-radius:0 0 10px 10px; box-sizing:border-box;
-  }
-  .chest-body::after{
-    content:""; position:absolute; left:44px; top:-2px; width:12px; height:14px;
-    background:#f2c14e; border:2px solid #5c3a1a; border-radius:3px; box-sizing:border-box;
-  }
-  .chest-lid{
-    position:absolute; top:0; left:0; width:100px; height:26px;
-    background:#a5702f; border:3px solid #5c3a1a; border-radius:12px 12px 3px 3px; box-sizing:border-box;
-    transform-origin:bottom center; transform:rotateX(0deg);
-    animation:chest-wiggle 1.2s ease-in-out infinite;
+  .loading-svg{ width:100%; max-width:320px; height:auto; overflow:visible; }
+
+  .chest-lid-group{
+    transform-box:fill-box; transform-origin:50% 100%;
+    animation:chest-wiggle 1.3s ease-in-out infinite;
   }
   @keyframes chest-wiggle{
-    0%,100%{ transform:rotateX(0deg); }
-    50%{ transform:rotateX(-10deg); }
+    0%,100%{ transform:rotate(0deg); }
+    50%{ transform:rotate(-6deg); }
   }
-  .mochi{
-    position:relative; width:52px; height:52px; border-radius:50%;
-    background:#ffd23f; border:3px solid #e0a800; box-sizing:border-box;
-    animation:mochi-bounce 1.2s ease-in-out infinite;
+  .mochi-group{
+    transform-box:fill-box; transform-origin:50% 100%;
+    animation:mochi-bounce 1.3s ease-in-out infinite;
   }
   @keyframes mochi-bounce{
-    0%,100%{ transform:translateY(0); }
-    50%{ transform:translateY(-9px); }
+    0%,100%{ transform:translateY(0) scale(1,1); }
+    35%{ transform:translateY(-14px) scale(1.03,0.97); }
+    55%{ transform:translateY(-14px) scale(0.97,1.03); }
+    100%{ transform:translateY(0) scale(1,1); }
   }
-  .mochi-eye{ position:absolute; top:19px; width:6px; height:8px; background:#4a3300; border-radius:50%; }
-  .mochi-eye.left{ left:13px; } .mochi-eye.right{ right:13px; }
-  .mochi-mouth{
-    position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
-    width:14px; height:7px; border-bottom:3px solid #4a3300; border-radius:0 0 10px 10px;
-  }
-  .sparkles{ position:absolute; inset:-10px; pointer-events:none; }
-  .sparkles span{
-    position:absolute; top:36%; left:50%; width:6px; height:6px;
-    background:#ffe066; border-radius:50%; opacity:0;
-  }
-  .sparkles span:nth-child(1){ --tx:-38px; --ty:-34px; }
-  .sparkles span:nth-child(2){ --tx:0px;   --ty:-46px; }
-  .sparkles span:nth-child(3){ --tx:38px;  --ty:-34px; }
-  .sparkles span:nth-child(4){ --tx:-22px; --ty:-16px; }
-  .sparkles span:nth-child(5){ --tx:22px;  --ty:-16px; }
-  .loading-caption{font-size:.78rem; color:var(--text-sub); margin:0;}
+  .mochi-arm-left{ transform-box:fill-box; transform-origin:100% 30%; animation:arm-wave-l 1.3s ease-in-out infinite; }
+  .mochi-arm-right{ transform-box:fill-box; transform-origin:0% 30%; animation:arm-wave-r 1.3s ease-in-out infinite; }
+  @keyframes arm-wave-l{ 0%,100%{ transform:rotate(0deg); } 50%{ transform:rotate(14deg); } }
+  @keyframes arm-wave-r{ 0%,100%{ transform:rotate(0deg); } 50%{ transform:rotate(-14deg); } }
 
-  .loading-scene.opening .chest-lid{
-    animation:none; transform:rotateX(-120deg); transition:transform .45s ease-out;
+  .glow-burst{ transform-box:fill-box; transform-origin:50% 50%; opacity:0; }
+  .sparkle-burst .spark{ opacity:0; transform-box:fill-box; transform-origin:50% 50%; }
+
+  .loading-scene.opening .chest-lid-group{
+    animation:none; transform:rotate(-108deg); transition:transform .5s cubic-bezier(.34,1.56,.64,1);
   }
-  .loading-scene.opening .mochi{ animation:none; transform:translateY(-9px) scale(1.06); }
-  .loading-scene.opening .sparkles span{ animation:sparkle-burst .55s ease-out forwards; }
-  @keyframes sparkle-burst{
-    0%{ opacity:1; transform:scale(.2) translate(0, 0); }
-    100%{ opacity:0; transform:scale(1) translate(var(--tx), var(--ty)); }
+  .loading-scene.opening .mochi-group{
+    animation:none; transform:translateY(-18px) scale(1.08,1.08); transition:transform .35s ease-out;
+  }
+  .loading-scene.opening .mochi-arm-left,
+  .loading-scene.opening .mochi-arm-right{ animation:none; }
+  .loading-scene.opening .mochi-arm-left{ transform:rotate(28deg); transition:transform .3s ease-out; }
+  .loading-scene.opening .mochi-arm-right{ transform:rotate(-28deg); transition:transform .3s ease-out; }
+  .loading-scene.opening .glow-burst{ animation:glow-flash .65s ease-out forwards; }
+  @keyframes glow-flash{
+    0%{ opacity:0; transform:scale(.4); }
+    35%{ opacity:1; transform:scale(1.15); }
+    100%{ opacity:0; transform:scale(1.5); }
+  }
+  .loading-scene.opening .sparkle-burst .spark{ animation:spark-burst .7s ease-out forwards; }
+  @keyframes spark-burst{
+    0%{ opacity:1; transform:scale(.3) translate(0,0) rotate(0deg); }
+    100%{ opacity:0; transform:scale(1) translate(var(--tx), var(--ty)) rotate(var(--rot,180deg)); }
   }
 </style>
 </head>
@@ -254,17 +248,72 @@
     <p class="status" id="status"></p>
     <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
     <div class="loading-scene" id="loadingScene" style="display:none;">
-      <div class="chest-wrap">
-        <div class="chest-lid"></div>
-        <div class="chest-body"></div>
-        <div class="sparkles"><span></span><span></span><span></span><span></span><span></span></div>
-      </div>
-      <div class="mochi">
-        <div class="mochi-eye left"></div>
-        <div class="mochi-eye right"></div>
-        <div class="mochi-mouth"></div>
-      </div>
-      <p class="loading-caption">お宝を探しています…</p>
+      <svg class="loading-svg" viewBox="0 0 260 340" role="img" aria-label="読み込み中">
+        <defs>
+          <linearGradient id="lgChestBody" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#b07a3c"/>
+            <stop offset="100%" stop-color="#7a4f22"/>
+          </linearGradient>
+          <linearGradient id="lgChestLid" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#d69a52"/>
+            <stop offset="100%" stop-color="#9c6530"/>
+          </linearGradient>
+          <linearGradient id="lgMochi" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffe066"/>
+            <stop offset="100%" stop-color="#ffc82f"/>
+          </linearGradient>
+          <radialGradient id="rgGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fff4c2" stop-opacity="0.95"/>
+            <stop offset="100%" stop-color="#fff4c2" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <ellipse cx="130" cy="326" rx="95" ry="10" fill="#000" opacity=".10"/>
+
+        <g class="glow-burst"><circle cx="130" cy="150" r="80" fill="url(#rgGlow)"/></g>
+
+        <!-- 宝箱 -->
+        <g>
+          <rect x="34" y="176" width="192" height="96" rx="16" fill="url(#lgChestBody)" stroke="#5c3a1a" stroke-width="4"/>
+          <rect x="34" y="176" width="192" height="16" fill="#5c3a1a" opacity=".55"/>
+          <rect x="34" y="252" width="192" height="12" fill="#5c3a1a" opacity=".4"/>
+          <circle cx="60" cy="224" r="5" fill="#f2c14e" stroke="#8a6113" stroke-width="1.5"/>
+          <circle cx="200" cy="224" r="5" fill="#f2c14e" stroke="#8a6113" stroke-width="1.5"/>
+          <rect x="112" y="160" width="36" height="40" rx="6" fill="#f2c14e" stroke="#8a6113" stroke-width="3"/>
+          <circle cx="130" cy="178" r="6" fill="#8a6113"/>
+
+          <g class="chest-lid-group">
+            <path d="M30,180 Q30,96 130,88 Q230,96 230,180 Z" fill="url(#lgChestLid)" stroke="#5c3a1a" stroke-width="4"/>
+            <path d="M62,146 Q130,116 198,146" stroke="#5c3a1a" stroke-width="3" fill="none" opacity=".35"/>
+          </g>
+        </g>
+
+        <g class="sparkle-burst">
+          <circle class="spark" cx="130" cy="150" r="6" fill="#ffe066" style="--tx:-52px; --ty:-70px; --rot:140deg;"/>
+          <circle class="spark" cx="130" cy="150" r="5" fill="#fff2b0" style="--tx:0px; --ty:-92px; --rot:-120deg;"/>
+          <circle class="spark" cx="130" cy="150" r="6" fill="#ffd23f" style="--tx:52px; --ty:-70px; --rot:200deg;"/>
+          <circle class="spark" cx="130" cy="150" r="4.5" fill="#ffe066" style="--tx:-34px; --ty:-30px; --rot:80deg;"/>
+          <circle class="spark" cx="130" cy="150" r="4.5" fill="#fff2b0" style="--tx:34px; --ty:-30px; --rot:-80deg;"/>
+          <circle class="spark" cx="130" cy="150" r="5.5" fill="#ffd23f" style="--tx:-78px; --ty:-16px; --rot:160deg;"/>
+          <circle class="spark" cx="130" cy="150" r="5.5" fill="#ffe066" style="--tx:78px; --ty:-16px; --rot:-160deg;"/>
+        </g>
+
+        <!-- 黄色い丸い生き物 -->
+        <g class="mochi-group">
+          <circle cx="130" cy="290" r="66" fill="url(#lgMochi)" stroke="#e0a800" stroke-width="5"/>
+          <ellipse class="mochi-arm-left" cx="58" cy="306" rx="17" ry="12" fill="url(#lgMochi)" stroke="#e0a800" stroke-width="4"/>
+          <ellipse class="mochi-arm-right" cx="202" cy="306" rx="17" ry="12" fill="url(#lgMochi)" stroke="#e0a800" stroke-width="4"/>
+          <ellipse cx="100" cy="316" rx="12" ry="8" fill="#ffb3a7" opacity=".65"/>
+          <ellipse cx="160" cy="316" rx="12" ry="8" fill="#ffb3a7" opacity=".65"/>
+          <ellipse cx="108" cy="282" rx="13" ry="15" fill="#fff"/>
+          <ellipse cx="152" cy="282" rx="13" ry="15" fill="#fff"/>
+          <circle cx="111" cy="287" r="7" fill="#4a3300"/>
+          <circle cx="155" cy="287" r="7" fill="#4a3300"/>
+          <circle cx="114" cy="282" r="2.4" fill="#fff"/>
+          <circle cx="158" cy="282" r="2.4" fill="#fff"/>
+          <path d="M116,310 Q130,322 144,310" stroke="#4a3300" stroke-width="4" fill="none" stroke-linecap="round"/>
+        </g>
+      </svg>
     </div>
 
     <div id="resultPanel" style="display:none;">
@@ -870,7 +919,14 @@ async function runSearch(){
       item._mall = "楽天";
       return item;
     });
-    const items = [...rakutenItems, ...yahooItems];
+    // 楽天・Yahoo!を交互に並べておく（後段でAIに渡す件数を絞っても、どちらかのモールだけ
+    // AI分析から漏れてしまう、という偏りが出ないようにするため）
+    const items = [];
+    const maxLen = Math.max(rakutenItems.length, yahooItems.length);
+    for(let i = 0; i < maxLen; i++){
+      if(rakutenItems[i]) items.push(rakutenItems[i]);
+      if(yahooItems[i]) items.push(yahooItems[i]);
+    }
     if(items.length === 0){
       statusEl.textContent = "商品が見つかりませんでした。";
       prefsContainer.innerHTML = `<p class="empty-note">検索すると表示されます</p>`;
@@ -878,16 +934,14 @@ async function runSearch(){
       return;
     }
 
-    const itemsForAI = items.map((it, index) => {
-      const item = it.Item || it;
-      return {
-        index,
-        name: item.itemName || "",
-        caption: (item.itemCaption || "").slice(0, 300),
-      };
-    });
-
-    statusEl.textContent = "AIでジャンルを分析中…";
+    // AIへ一度に渡す件数が多いほど分析に時間がかかるため、上限を設けて速度を優先する。
+    // 上限を超えた分は、AIによる整形（短い商品名や関連性判定など）は無いまま簡易表示になる。
+    const AI_ANALYZE_LIMIT = 30;
+    const itemsForAI = items.slice(0, AI_ANALYZE_LIMIT).map((item, index) => ({
+      index,
+      name: item.itemName || "",
+      caption: (item.itemCaption || "").slice(0, 300),
+    }));
 
     // 「訳あり」は独立した除外専用チェックとして扱うため、AIが同じ概念の属性を別idで生成しても
     // 好みプロフィール（attrDefs）には含めない（重複除外）
